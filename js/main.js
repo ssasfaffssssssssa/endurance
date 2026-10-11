@@ -11,6 +11,7 @@ import { createMiller } from './worlds/miller.js';
 import { createGargantua, RS } from './worlds/gargantua.js';
 import { createTesseract } from './worlds/tesseract.js';
 import { createHUD } from './hud.js';
+import { applyEnvironments } from './env.js';
 const DEV = new URLSearchParams(location.search);
 const RECORD = DEV.has('promo') || DEV.has('cover');
 if (RECORD) { window.__record = true; document.body.classList.add('promo'); }
@@ -49,6 +50,7 @@ async function load() {
   W.miller = createMiller();
   await step(.72, '折叠五维空间 · FOLDING FIVE DIMENSIONS');
   W.tess = createTesseract();
+  applyEnvironments(renderer, W);
   resize();
   let i = 0;
   for (const k of order) {
