@@ -78,7 +78,9 @@ async function load() {
 }
 
 /* ————— sizing & adaptive resolution ————— */
+const qByWorld = {}; let qWorld = null;
 function resize() {
+  if (current && current.id !== qWorld) { if (qWorld) qByWorld[qWorld] = quality; quality = qByWorld[current.id] ?? (TOUCH ? .7 : 1); qWorld = current.id; }
   const w = innerWidth, h = innerHeight;
   const maxS = current ? current.maxScale : 1;
   const pr = clamp(DPR * quality, .5, Math.min(DPR, maxS));
@@ -86,18 +88,24 @@ function resize() {
   renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
   post.setSize(w, h, pr);
   window.__renderH = h * pr;
-  window.__app = { W, post, score, get filmT() { return filmT; }, seek, togglePlay, get state() { return state; } };
+  window.__app = { W, post, score, get filmT() { return filmT; }, seek, togglePlay, get state() { return state; }, get quality() { return quality; }, get pr() { return curPR; }, get ft() { return ftAvg; } };
   for (const k in W) { W[k].camera.aspect = w / h; W[k].camera.updateProjectionMatrix(); }
   updateBars();
 }
 addEventListener('resize', resize);
 let ftAvg = 16, ftT = 0;
+// Adaptive resolution, remembered per scene. The display's own refresh interval is the yardstick:
+// hold the refresh rate -> creep quality up; fall under ~70% of it -> step down.
+let refreshMs = 16.7, refreshSamples = [], goodT = 0;
 function adapt(dt) {
   if (RECORD) return;
-  ftAvg = lerp(ftAvg, dt * 1000, .05); ftT += dt;
+  const ms = dt * 1000;
+  if (refreshSamples.length < 90) { refreshSamples.push(ms); if (refreshSamples.length === 90) { const v = [...refreshSamples].sort((a, b) => a - b); refreshMs = Math.max(6, v[Math.floor(v.length * .2)]); } }
+  ftAvg = lerp(ftAvg, ms, .05); ftT += dt;
+  goodT = ftAvg < refreshMs * 1.1 ? goodT + dt : 0;
   if (ftT < 1.2) return;
-  if (ftAvg > 24 && quality > .45) { quality *= .86; ftT = 0; resize(); }
-  else if (ftAvg < 15 && quality < 1) { quality = Math.min(1, quality * 1.06); ftT = 0; resize(); }
+  if (ftAvg > refreshMs * 1.45 && quality > .35) { quality *= .87; ftT = 0; goodT = 0; resize(); }
+  else if (goodT > 2.5 && quality < 1) { quality = Math.min(1, quality * 1.1); ftT = 0; goodT = 0; resize(); }
 }
 
 /* ————— letterbox ————— */

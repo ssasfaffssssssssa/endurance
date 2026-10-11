@@ -193,23 +193,36 @@ export class Score {
     if (this.ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC && !given) return;
     const ctx = this.ctx = given || new AC();
-    this.master = ctx.createGain(); this.master.gain.value = this.muted ? 0 : .9;
+    this.master = ctx.createGain(); this.master.gain.value = this.muted ? 0 : .72;
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 3.5; comp.attack.value = .02; comp.release.value = .4;
     this.master.connect(comp).connect(ctx.destination);
     this.dry = ctx.createGain(); this.dry.gain.value = .55; this.dry.connect(this.master);
-    this.rev = ctx.createConvolver(); this.rev.buffer = this.impulse(6.5, 2.4);
-    this.wet = ctx.createGain(); this.wet.gain.value = .75; this.rev.connect(this.wet).connect(this.master);
+    this.rev = ctx.createConvolver(); this.rev.buffer = this.impulse(7.5, 2.6);
+    this.wet = ctx.createGain(); this.wet.gain.value = .66; this.rev.connect(this.wet).connect(this.master);
     this.waves = {}; for (const k in REG) { const h = REG[k]; const re = new Float32Array(h.length + 1), im = new Float32Array(h.length + 1); h.forEach((a, i) => im[i + 1] = a); this.waves[k] = ctx.createPeriodicWave(re, im); }
     const len = ctx.sampleRate * 2; this.noise = ctx.createBuffer(1, len, ctx.sampleRate); const d = this.noise.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     this.ambient = null;
   }
   impulse(sec, decay) {
-    const ctx = this.ctx, len = Math.floor(ctx.sampleRate * sec), b = ctx.createBuffer(2, len, ctx.sampleRate);
-    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0; for (let i = 0; i < len; i++) { const x = Math.random() * 2 - 1; lp = lp * .55 + x * .45; d[i] = lp * Math.pow(1 - i / len, decay) * (i < 200 ? i / 200 : 1); } }
+    // a stone nave: sparse early reflections, then a dense tail whose highs die faster than its lows
+    const ctx = this.ctx, sr = ctx.sampleRate, len = Math.floor(sr * sec), b = ctx.createBuffer(2, len, sr);
+    const refl = [[.011, .55], [.019, .42], [.027, .38], [.041, .3], [.053, .26], [.067, .2], [.083, .17]];
+    for (let c = 0; c < 2; c++) {
+      const d = b.getChannelData(c);
+      let lp = 0, lp2 = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / sr, x = Math.random() * 2 - 1;
+        const k = .35 + .6 * Math.min(1, t / (sec * .6));          // the tail darkens as it decays
+        lp = lp * k + x * (1 - k); lp2 = lp2 * .5 + lp * .5;
+        const env = Math.pow(1 - i / len, decay) * Math.min(1, t / .09);
+        d[i] = lp2 * env * 1.6;
+      }
+      refl.forEach(([t, a], j) => { const i = Math.floor((t + (c ? .0037 * (j % 3) : 0)) * sr); if (i < len) { d[i] += a * (j % 2 ? -1 : 1); d[i + 1] += a * .5; } });
+    }
     return b;
   }
   resume() { if (this.ctx && this.ctx.state !== 'running') this.ctx.resume(); }
-  setMuted(m) { this.muted = m; if (this.master) this.master.gain.setTargetAtTime(m ? 0 : .9, this.ctx.currentTime, .08); }
+  setMuted(m) { this.muted = m; if (this.master) this.master.gain.setTargetAtTime(m ? 0 : .72, this.ctx.currentTime, .08); }
   // ——— film transport ———
   running() { return this.ctx && this.ctx.state === 'running'; }
   time() { if (!this.running()) return null; return this.playing ? this.ctx.currentTime - this.anchor : this.pausedAt; }
@@ -245,14 +258,31 @@ export class Score {
     g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(peak, at + att); g.gain.setValueAtTime(peak, at + Math.max(att, dur)); g.gain.linearRampToValueAtTime(0, at + Math.max(att, dur) + rel);
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.min(12000, f * (e.reg === 'reed' ? 14 : 8)); lp.Q.value = .3;
     const end = at + Math.max(att, dur) + rel + .1;
-    for (const det of [-4, 3.5]) {
+    // three slightly mistuned ranks: unison pair plus a quiet 2' rank an octave up
+    for (const [det, mul, amp] of [[-4, 1, 1], [3.5, 1, 1], [1.5, 2, e.reg === 'pedal' ? .18 : .28]]) {
       const o = ctx.createOscillator(); o.setPeriodicWave(this.waves[e.reg] || this.waves.flute);
-      o.frequency.value = f; o.detune.value = det + (Math.random() - .5) * 2;
+      o.frequency.value = f * mul; o.detune.value = det + (Math.random() - .5) * 2;
       if (e.gliss) o.detune.linearRampToValueAtTime(det + 120, end);
-      o.connect(lp); o.start(at); o.stop(end); this.track(o);
+      const og = ctx.createGain(); og.gain.value = amp;
+      o.connect(og).connect(lp); o.start(at); o.stop(end); this.track(o);
     }
-    // wind noise in the pipe
-    lp.connect(g); this.out(g, e.reg === 'pedal' ? .45 : .7); this.track(g);
+    // a gentle tremulant on the flutes
+    if (e.reg === 'flute' && dur > 1.2) {
+      const tr = ctx.createOscillator(), tg = ctx.createGain(); tr.frequency.value = 5.2 + Math.random() * .6; tg.gain.value = peak * .06;
+      tr.connect(tg).connect(g.gain); tr.start(at); tr.stop(end); this.track(tr);
+    }
+    // chiff: the breath of air as the pipe speaks
+    if (att < .5 && e.reg !== 'pedal') {
+      const n = ctx.createBufferSource(); n.buffer = this.noise;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = Math.min(9000, f * 3); bp.Q.value = 2.5;
+      const ng = ctx.createGain(); ng.gain.setValueAtTime(peak * .5, at); ng.gain.exponentialRampToValueAtTime(.0001, at + .06);
+      n.connect(bp).connect(ng); this.out(ng, .5); n.start(at, Math.random()); n.stop(at + .08); this.track(n, ng);
+    }
+    // place each pipe somewhere in the case: pedals centre, trebles spread
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (pan) { pan.pan.value = e.reg === 'pedal' ? 0 : Math.max(-.6, Math.min(.6, ((e.m - 60) / 30) * .35 + (Math.random() - .5) * .3)); lp.connect(g).connect(pan); this.out(pan, e.reg === 'pedal' ? .45 : .7); this.track(pan); }
+    else { lp.connect(g); this.out(g, e.reg === 'pedal' ? .45 : .7); }
+    this.track(g);
   }
   _bell(e, at) {
     const ctx = this.ctx, f = mtof(e.m);

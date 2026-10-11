@@ -155,7 +155,7 @@ void ksFL(vec3 x, float a, out float f, out vec3 l, out float r){
   l = vec3((r*x.x + a*x.z)*d, x.y/r, (r*x.z - a*x.x)*d);
 }
 float ksF(vec3 x, vec3 p, float a){ float f, r; vec3 l; ksFL(x, a, f, l, r); float L = 1. + dot(l, p); return f*L*L; }
-void ksDeriv(vec3 x, vec3 p, float a, out vec3 dx, out vec3 dp, out float r){
+void ksDerivFD(vec3 x, vec3 p, float a, out vec3 dx, out vec3 dp, out float r){
   float f; vec3 l; ksFL(x, a, f, l, r);
   float L = 1. + dot(l, p);
   dx = p - f*L*l;
@@ -164,13 +164,40 @@ void ksDeriv(vec3 x, vec3 p, float a, out vec3 dx, out vec3 dp, out float r){
             ksF(x + vec3(0,e,0), p, a) - ksF(x - vec3(0,e,0), p, a),
             ksF(x + vec3(0,0,e), p, a) - ksF(x - vec3(0,0,e), p, a)) * (.25/e);
 }
+// analytic gradient of F = f L^2 (one metric evaluation per call instead of seven)
+void ksDeriv(vec3 x, vec3 p, float a, out vec3 dx, out vec3 dp, out float r){
+  float a2 = a*a, y = x.y;
+  float R2 = dot(x, x), b = R2 - a2;
+  r = max(sqrt(.5*(b + sqrt(b*b + 4.*a2*y*y))), 1e-4);
+  float r2 = r*r, r3 = r2*r;
+  // dr/dx_i = (x_i r^2 + a^2 y delta_iy) / (2 r^3 - (R^2 - a^2) r)
+  float den = 2.*r3 - b*r;
+  vec3 dr = (x*r2 + vec3(0., a2*y, 0.)) / den;
+  float S = r2*r2 + a2*y*y;
+  float f = 2.*BHM*r3/S;
+  vec3 dS = 4.*r3*dr + vec3(0., 2.*a2*y, 0.);
+  vec3 df = 2.*BHM*(3.*r2*dr*S - r3*dS)/(S*S);
+  float D = r2 + a2, iD = 1./D, iD2 = iD*iD;
+  float nx = r*x.x + a*x.z, nz = r*x.z - a*x.x;
+  vec3 l = vec3(nx*iD, y/r, nz*iD);
+  // gradients of each component of l
+  vec3 gnx = dr*x.x + vec3(r, 0., a);
+  vec3 gnz = dr*x.z + vec3(-a, 0., r);
+  vec3 glx = (gnx*D - nx*2.*r*dr)*iD2;
+  vec3 gly = (vec3(0., r, 0.) - y*dr)/r2;
+  vec3 glz = (gnz*D - nz*2.*r*dr)*iD2;
+  float L = 1. + dot(l, p);
+  vec3 dL = glx*p.x + gly*p.y + glz*p.z;
+  dx = p - f*L*l;
+  dp = .5*(L*L*df + 2.*f*L*dL);
+}
 
 // ro, rd in black-hole space (r_s units, disk in the y=0 plane)
 vec3 traceBH(vec3 ro, vec3 rd, out vec3 outDir, out float captured, out float minR, const int STEPS){
   captured = 0.; minR = 1e5;
   vec3 x = ro, v = rd;
   vec3 acc = vec3(0.); float alpha = 0.;
-  float R0 = max(uDiskOuter*1.6, 28.);
+  float R0 = max(uDiskOuter*1.18, 12.);
   float b0 = dot(x, v), c0 = dot(x, x) - R0*R0;
   if (c0 > 0.){
     float disc = b0*b0 - c0;
@@ -203,7 +230,7 @@ vec3 traceBH(vec3 ro, vec3 rd, out vec3 outDir, out float captured, out float mi
     r = r1; minR = min(minR, r);
     if (r < rh*1.03){ captured = 1.; break; }
     if (r > R0*1.05 && dot(x, dx1) > 0.){ dx = dx1; escaped = true; break; }
-    float h = clamp((r - rh)*.075, .006, .9);
+    float h = clamp((r - rh)*mix(.075, .13, smoothstep(4., 12., r)), .006, 1.4);
     vec3 dx2, dp2; float r2;
     ksDeriv(x + .5*h*dx1, p + .5*h*dp1, a, dx2, dp2, r2);
     vec3 xn = x + h*dx2;
@@ -226,7 +253,8 @@ vec3 traceBH(vec3 ro, vec3 rd, out vec3 outDir, out float captured, out float mi
   }
   // a ray still bound after all steps has been wound up by the photon sphere: treat as captured
   if (!escaped && alpha < .985) captured = 1.;
-  v = normalize(dx);
+  // leave along the momentum (the flat-space direction), not the Kerr–Schild coordinate velocity
+  v = normalize(p);
   if (captured < .5){
     float bo = length(cross(x, v));
     float cpsi = clamp(dot(x, v)/length(x), 0., 1.);
