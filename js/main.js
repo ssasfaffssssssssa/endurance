@@ -104,7 +104,7 @@ function updateBars() {
 
 /* ————— audio ————— */
 const score = new Score();
-let muted = false;
+let muted = DEV.has('dev');   // dev/testing sessions stay silent
 function setMuted(m) { muted = m; score.setMuted(m); const t = m ? 'SOUND OFF' : 'SOUND ON'; $('tb-sound').textContent = t; $('ex-sound').innerHTML = '<kbd>M</kbd>' + t; }
 
 /* ————— film ————— */
