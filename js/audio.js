@@ -330,6 +330,37 @@ export class Score {
     const g = ctx.createGain(); g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(e.vel * .15, at + .5); g.gain.linearRampToValueAtTime(0, at + e.dur);
     o.connect(g); g.connect(this.dry); o.start(at); o.stop(at + e.dur + .05); this.track(o, g);
   }
+  // ——— docking game: thrusters, a pulse that tightens as the spins converge, impacts, the latch ———
+  gameStart() {
+    if (!this.ctx || this.game) return;
+    const ctx = this.ctx;
+    const hiss = ctx.createBufferSource(); hiss.buffer = this.noise; hiss.loop = true;
+    const hbp = ctx.createBiquadFilter(); hbp.type = 'bandpass'; hbp.frequency.value = 2400; hbp.Q.value = .7;
+    const hg = ctx.createGain(); hg.gain.value = 0;
+    hiss.connect(hbp).connect(hg); this.out(hg, .25); hiss.start();
+    const g = { hiss, hg, match: 0, next: ctx.currentTime + .2, k: 0 };
+    g.timer = setInterval(() => {
+      // schedule ahead: the interval shrinks from 0.5 s to 0.125 s as the spin match improves
+      while (g.next < ctx.currentTime + .25) {
+        const step = .5 - .375 * g.match;
+        const vel = .18 + .4 * g.match;
+        this._tick({ vel, f: 2200 + 1600 * g.match, thud: g.match > .7 ? (g.match - .7) * 1.5 : 0 }, g.next);
+        if (g.k % 4 === 0) this._organ({ m: [45, 45, 41, 43][(g.k / 4 | 0) % 4], dur: step * 3.5, vel: .08 + .1 * g.match, reg: 'pedal', att: .05, rel: .4 }, g.next);
+        if (g.match > .5 && g.k % 2 === 0) this._organ({ m: [69, 76, 72, 76, 71, 76][(g.k / 2 | 0) % 6], dur: step * 1.2, vel: .03 + .05 * g.match, reg: 'flute', att: .01, rel: .3 }, g.next);
+        g.k++; g.next += step;
+      }
+    }, 60);
+    this.game = g;
+  }
+  gameSet(thrust, match) { const g = this.game; if (!g) return; g.hg.gain.setTargetAtTime(Math.min(1, thrust) * .09, this.ctx.currentTime, .05); g.match = Math.max(0, Math.min(1, match)); }
+  gameImpact() { if (this.ctx) this._impact({ vel: .55 }, this.ctx.currentTime + .01); }
+  gameDocked() {
+    if (!this.ctx) return; const t = this.ctx.currentTime + .02;
+    this._impact({ vel: .4, soft: true }, t);
+    ch('A1 A2 E3 A3 C#4 E4 A4 E5').forEach(m => this._organ({ m, dur: 3.2, vel: .1, reg: 'principal', att: .3, rel: 2.5 }, t + .15));
+  }
+  gameStop() { const g = this.game; if (!g) return; clearInterval(g.timer); try { g.hiss.stop(); } catch (e) { } this.game = null; }
+
   // ——— explore ambience: a slow chord per world ———
   ambience(chord) {
     if (!this.ctx) return;

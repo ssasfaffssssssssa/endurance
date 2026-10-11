@@ -30,15 +30,22 @@ float map(vec3 p, out float mat){
     float board = sdBox(vec3(s.x, sy + shelfH*.5 - .03, s.z), vec3(C.x*.5 - .1, .025, .2));
     // books: hashed widths, heights and depths
     float bw = .13;
-    float bi = floor((s.x + C.x*.5) / bw);
     float shelfI = floor((s.y + C.y*.5) / shelfH);
-    float hb = hash13(vec3(bi, shelfI, h*91.));
-    float bxp = mod(s.x + C.x*.5, bw) - bw*.5;
-    float bookH = shelfH*(.55 + .35*hb);
-    float bookD = .1 + .12*hash11(hb*13.);
-    float book = sdBox(vec3(bxp, sy + shelfH*.5 - .055 - bookH*.5, s.z - .05), vec3(bw*.42, bookH*.5, bookD));
+    float bi0 = floor((s.x + C.x*.5) / bw);
+    // books have hashed sizes, so test the neighbours too — otherwise rays slip into the next book
+    float book = 1e3, hbBest = 0.;
+    for (int k = -1; k <= 1; k++){
+      float bi = bi0 + float(k);
+      float hb = hash13(vec3(bi, shelfI, h*91.));
+      if (hb < .12) continue;
+      float bxp = s.x + C.x*.5 - (bi + .5)*bw;
+      float bookH = shelfH*(.55 + .35*hb);
+      float bookD = .1 + .12*hash11(hb*13.);
+      float bk = sdBox(vec3(bxp, sy + shelfH*.5 - .055 - bookH*.5, s.z - .05), vec3(bw*.42, bookH*.5, bookD));
+      if (bk < book){ book = bk; hbBest = hb; }
+    }
     book = max(book, abs(s.x) - (C.x*.5 - .12));
-    book = hb < .12 ? 1e3 : book;
+    float hb = hbBest;
     float shelf = min(board, book);
     if (shelf < d){ d = shelf; mat = 1. + hb; }
   }
@@ -70,7 +77,7 @@ void main(){
   for (i = 0; i < 110; i++){
     vec3 p = ro + rd*t;
     float d = map(p, mat);
-    float stp = min(d*.75, .7);
+    float stp = min(d*.6, .55);
     strandAcc += gW * stp * .00035 / (gS*gS + .00035) * exp(-t*.03);
     if (gD < .001*t){ hit = true; break; }
     t += stp;

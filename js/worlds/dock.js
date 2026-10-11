@@ -118,21 +118,22 @@ export function createDock() {
     keys: {}, auto: false, t: 0,
   };
   const CONTACT = 6.8;
-  function reset() { Object.assign(G, { theta: 0, thetaS: 0, omegaR: 0, z: 120, vz: -4, x: 6, y: -4, vx: 0, vy: 0, state: 'approach', docked: 0, msg: '', shake: 0 }); }
+  function reset() { Object.assign(G, { theta: 0, thetaS: 0, omegaR: 0, z: 90, vz: -4, x: 6, y: -4, vx: 0, vy: 0, state: 'approach', docked: 0, msg: '', shake: 0 }); }
   function stepGame(dt) {
     G.t += dt;
     const k = G.keys;
     if (G.state === 'docked') { G.docked += dt; G.omegaR = G.omegaS; G.theta += G.omegaR * dt; G.thetaS += G.omegaS * dt; G.z = lerp(G.z, CONTACT - .05, dt * 4); return; }
     let roll = (k.e || k.arrowright || k.R ? 1 : 0) - (k.q || k.arrowleft || k.L ? 1 : 0);
-    let thr = (k.w || k.arrowup || k.F ? 1 : 0) - (k.s || k.arrowdown || k.B ? 1 : 0);
+    let thr = (k.s || k.arrowdown || k.B ? 1 : 0) - (k.w || k.arrowup || k.F ? 1 : 0);   // W / ▲ closes in (z decreases)
     if (G.auto) {
       const err = G.omegaS - G.omegaR; roll = clamp(err * 2.5, -1, 1);
-      const want = Math.abs(err) < .15 ? -clamp((G.z - CONTACT) * .12, .5, 9) : -clamp((G.z - 30) * .1, 0, 6);
+      const want = Math.abs(err) < .15 ? -clamp((G.z - CONTACT) * .22, 1.4, 10) : -clamp((G.z - 26) * .16, 0, 9);
       thr = clamp((want - G.vz) * .8, -1, 1);
       G.tx = 0; G.ty = 0;
     }
     G.omegaR += roll * 1.25 * dt;                      // roll thrusters
-    G.vz += thr * 4.0 * dt;                            // main / retro
+    if (world.score) world.score.gameSet(Math.abs(roll) + Math.abs(thr) * .7, 1 - Math.min(1, Math.abs(G.omegaS - G.omegaR) / G.omegaS));
+    G.vz += thr * 4.0 * dt;                            // main engine (+) / retro (−) along z
     G.vz = clamp(G.vz, -12, 4);
     // lateral: steer toward pointer target, slow drift away
     const ax = (G.tx - G.x) * 1.6 - G.vx * 1.8 + Math.sin(G.t * .7) * .25, ay = (G.ty - G.y) * 1.6 - G.vy * 1.8 + Math.cos(G.t * .53) * .25;
@@ -142,8 +143,8 @@ export function createDock() {
     G.z = Math.min(G.z, 160);
     if (G.z <= CONTACT) {
       const dOm = Math.abs(G.omegaS - G.omegaR), off = Math.hypot(G.x, G.y), sp = -G.vz;
-      if (dOm < .14 && off < .5 && sp < 2.2) { G.state = 'docked'; G.docked = 0; G.msg = 'docked'; G.msgT = 0; }
-      else { G.state = 'approach'; G.z = CONTACT + 10; G.vz = 3; G.shake = 1; G.msg = dOm >= .14 ? 'spin' : off >= .5 ? 'align' : 'speed'; G.msgT = 0; }
+      if (dOm < .14 && off < .5 && sp < 2.2) { G.state = 'docked'; G.docked = 0; G.msg = 'docked'; G.msgT = 0; world.score && world.score.gameDocked(); }
+      else { G.state = 'approach'; G.z = CONTACT + 10; G.vz = 3; G.shake = 1; G.msg = dOm >= .14 ? 'spin' : off >= .5 ? 'align' : 'speed'; G.msgT = 0; world.score && world.score.gameImpact(); }
     }
     G.shake = Math.max(0, G.shake - dt * 1.5); G.msgT += dt;
   }
@@ -223,9 +224,9 @@ export function createDock() {
     enter() {
       if (!ui) buildUI();
       ui.style.display = 'block'; document.body.classList.add('game');
-      reset(); addEventListener('keydown', kd); addEventListener('keyup', ku); addEventListener('pointermove', pm);
+      reset(); world.score && world.score.gameStart(); addEventListener('keydown', kd); addEventListener('keyup', ku); addEventListener('pointermove', pm);
     },
-    exit() { if (ui) ui.style.display = 'none'; document.body.classList.remove('game'); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('pointermove', pm); G.keys = {}; },
+    exit() { world.score && world.score.gameStop(); if (ui) ui.style.display = 'none'; document.body.classList.remove('game'); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('pointermove', pm); G.keys = {}; },
     markers() { return []; },
     hud() {
       if (!ui) return;

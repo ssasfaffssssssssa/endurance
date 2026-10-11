@@ -227,7 +227,7 @@ function enterExplore(id = exploreWorld) {
   setState('explore'); barsOn = false; updateBars();
   selectWorld(id);
 }
-const AMB = { dock: 'A0 E2 A2 E3 B3', dust: 'A1 E3 A3 B3 E4', earth: 'F1 C3 F3 A3 E4', saturn: 'G1 D3 G3 B3 D4', miller: 'D2 A3 D4 E4 F4', garg: 'A0 E2 A2 C4 E4', tess: 'C2 G3 C4 E4 B4' };
+const AMB = { dock: null, dust: 'A1 E3 A3 B3 E4', earth: 'F1 C3 F3 A3 E4', saturn: 'G1 D3 G3 B3 D4', miller: 'D2 A3 D4 E4 F4', garg: 'A0 E2 A2 C4 E4', tess: 'C2 G3 C4 E4 B4' };
 function selectWorld(id) {
   const prev = W[exploreWorld];
   if (prev && prev.exit && prev !== W[id]) prev.exit();
@@ -237,7 +237,7 @@ function selectWorld(id) {
   const cam = w.camera;
   cam.up.set(0, 1, 0);
   cam.position.copy(w.explore.pos); cam.fov = w.explore.fov || 40; cam.updateProjectionMatrix();
-  if (w.game) { w.enter(); exploreStart = performance.now(); }
+  if (w.game) { w.score = score.ok ? score : null; w.enter(); exploreStart = performance.now(); }
   controls = w.game ? null : new OrbitControls(cam, canvas);
   if (controls) {
   controls.target.copy(w.explore.target);
