@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { NOISE, RAY, SKY, QUAD_VERT } from '../glsl/common.js';
-import { createEndurance } from '../endurance.js';
+import { createEndurance, rigShadow, updateShadow, animateEndurance } from '../endurance.js';
 import { bindRay, ease, lerp } from '../util.js';
 
 const R = 100;
@@ -97,7 +97,8 @@ export async function createEarth(renderer) {
   scene.add(atm);
 
   const ship = createEndurance(); ship.scale.setScalar(.012); scene.add(ship);
-  const sun = new THREE.DirectionalLight(0xfff0dc, 3.4); sun.position.copy(SUN).multiplyScalar(50); scene.add(sun);
+  const sun = new THREE.DirectionalLight(0xfff0dc, 3.4); sun.position.copy(SUN).multiplyScalar(50); scene.add(sun); scene.add(sun.target);
+  rigShadow(sun, ship);
   scene.add(new THREE.HemisphereLight(0x6b8fd0, 0x2a1a10, .22));
 
   const tmp = new THREE.Vector3();
@@ -158,6 +159,7 @@ export async function createEarth(renderer) {
         ship.position.copy(camera.position).addScaledVector(fwd, 2.6).addScaledVector(right, .9).addScaledVector(up, -.45);
         orient(fwd.clone().multiplyScalar(-.75).addScaledVector(up, .6));
       }
+      animateEndurance(ship, t); updateShadow(sun);
       bindRay(skyU, camera);
     },
   };

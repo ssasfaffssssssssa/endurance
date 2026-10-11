@@ -40,6 +40,8 @@ export function applyEnvironments(renderer, W) {
     body: [.32, .26, .17], bodyD: new THREE.Vector3(.62, -.12, -.77), bodyR: .82 });
   // Earth orbit: sunlight plus blue-ochre earthshine from below
   W.earth.scene.environment = envFrom(renderer, { hor: [.06, .07, .09], zen: [.01, .01, .02], nadir: [.22, .2, .16], sun: [9, 8.6, 8], sunK: 400, sunD: new THREE.Vector3(-.82, .12, -.56) });
+  // Docking above an ice world: hard sun, bright icy glow from below
+  if (W.dock) W.dock.scene.environment = envFrom(renderer, { hor: [.05, .06, .08], zen: [.01, .012, .02], nadir: [.2, .23, .28], sun: [5, 4.8, 4.4], sunK: 400, sunD: new THREE.Vector3(.55, .35, .75) });
   // Miller: bright overcast dome over a dark sea
   W.miller.scene.environment = envFrom(renderer, { zen: [.75, .82, .9], hor: [1.0, 1.05, 1.08], nadir: [.12, .16, .17] });
 }

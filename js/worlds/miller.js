@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NOISE, RAY, QUAD_VERT, BLACKHOLE } from '../glsl/common.js';
+import { NOISE, RAY, QUAD_VERT, BLACKHOLE, iscoRs } from '../glsl/common.js';
 import { createRanger, createMaterials } from '../endurance.js';
 import { bindRay, ease, lerp, smooth } from '../util.js';
 
@@ -69,7 +69,12 @@ float height(vec2 p){ return bigWave(p) + chop(p); }
 void main(){
   vec2 p = position.xz + uOffset;
   float h = height(p);
-  vW = vec3(p.x, h, p.y); vH = h; vDist = length(position.xz);
+  // the lip: near the top of the face the water is thrown forward, toward the viewer
+  float sW = dot(p, uWaveDir) - uFront;
+  float top = clamp(bigWave(p)/max(uWaveH, 1.), 0., 1.);
+  float lip = pow(top, 4.) * exp(-pow((sW + uWaveH*.15)/(uWaveH*.5), 2.)) * uWaveH * .28;
+  vec2 q = p - uWaveDir*lip;
+  vW = vec3(q.x, h + lip*.12, q.y); vH = h; vDist = length(position.xz);
   gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.);
 }
 `;
@@ -167,7 +172,7 @@ export function createMiller() {
   const U = {
     uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uCamPos: { value: new THREE.Vector3() },
     uPixAng: { value: .001 }, uTime: { value: 0 }, uStarGain: { value: .25 },
-    uDoppler: { value: 0 }, uDiskGain: { value: 1.3 }, uDiskTime: { value: 0 }, uDiskTilt: { value: 0 }, uDiskOuter: { value: 13 }, uDiskTemp: { value: 5200 },
+    uDoppler: { value: 0 }, uDiskGain: { value: 1.3 }, uDiskTime: { value: 0 }, uDiskTilt: { value: 0 }, uDiskOuter: { value: 13 }, uDiskTemp: { value: 5200 }, uSpin: { value: .8 }, uRin: { value: iscoRs(.8) },
     uBHDir: { value: BHDIR }, uHaze: { value: 1 },
   };
   const sky = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: SKY_FRAG, uniforms: U, depthWrite: false, depthTest: false }));
@@ -179,6 +184,28 @@ export function createMiller() {
   };
   const ocean = new THREE.Mesh(radialGrid(520, 512, 22000), new THREE.ShaderMaterial({ vertexShader: OCEAN_VERT, fragmentShader: OCEAN_FRAG, uniforms: OU }));
   ocean.frustumCulled = false; scene.add(ocean);
+
+  // spray torn off the crest
+  const NS = 16000, sp = new Float32Array(NS * 3), ss = new Float32Array(NS * 2);
+  for (let i = 0; i < NS; i++) { ss[i * 2] = Math.random(); ss[i * 2 + 1] = Math.random(); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3)); sg.setAttribute('aS', new THREE.BufferAttribute(ss, 2));
+  const SU = { uTime: OU.uTime, uFront: OU.uFront, uWaveH: OU.uWaveH, uCamX: { value: 0 }, uPix: { value: 800 } };
+  const spray = new THREE.Points(sg, new THREE.ShaderMaterial({
+    uniforms: SU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `uniform float uTime, uFront, uWaveH, uCamX, uPix; attribute vec2 aS; varying float vA;
+      void main(){
+        float life = fract(uTime*.22 + aS.y);
+        float x = uCamX + (aS.x - .5)*5200.;
+        float H = uWaveH*(.8 + .2*sin(x*.0011 + 1.3) + .1*sin(x*.0031));
+        float z = -uFront + uWaveH*.12 + life*uWaveH*.55*(.5 + aS.y);       // blown back over the crest
+        float y = H*.97 + life*uWaveH*.35*(.6 + aS.x) - life*life*uWaveH*.25;
+        vA = (1. - life)*smoothstep(0., .1, life)*smoothstep(6000., 600., abs(uFront))*(.5 + .5*fract(aS.x*9.7));
+        vec4 mv = modelViewMatrix*vec4(x, y, z, 1.);
+        gl_PointSize = clamp(uPix*(10. + life*30.)/-mv.z, 1., 90.);
+        gl_Position = projectionMatrix*mv; }`,
+    fragmentShader: `varying float vA; void main(){ vec2 c = gl_PointCoord - .5; float a = exp(-dot(c,c)*8.); gl_FragColor = vec4(vec3(.82,.86,.88)*a*vA*.09, 1.); }`,
+  }));
+  spray.frustumCulled = false; scene.add(spray);
 
   // the Ranger, sitting in knee-deep water
   const M = createMaterials();
@@ -240,6 +267,7 @@ export function createMiller() {
       U.uTime.value = t; U.uDiskTime.value = t;
       if (mode === 'explore') { front -= dt * 260; if (front < -800) front = 6500; }
       OU.uFront.value = front; OU.uWaveH.value = waveH;
+      SU.uCamX.value = camera.position.x; SU.uPix.value = (window.__renderH || innerHeight) * .9;
       OU.uOffset.value.set(Math.round(camera.position.x / 20) * 20, Math.round(camera.position.z / 20) * 20);
       // Ranger rides the water
       const rx = -22, rz = -58;

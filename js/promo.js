@@ -15,32 +15,34 @@ const $ = id => document.getElementById(id);
 //       'explore' (windowed HUD; click = target clicked at the segment start), 'expand' handled by the first film shot after explore
 // fx: whiteOut (flash at end), whiteIn, warp ('in'|'out'|'ramp'), shake, fadeIn
 const SEGMENTS = [
-  // ——— cold open: the biggest images, no words ———
-  { kind: 'film', w: 'garg', shot: 'flyby', u0: .30, u1: .80, d: 1.9 },
-  { kind: 'film', w: 'miller', shot: 'rise', u0: .62, u1: 1, d: 1.6, fx: { shake: 1 } },
-  { kind: 'film', w: 'saturn', shot: 'enter', u0: .45, u1: 1, d: 1.3, fx: { warp: 'ramp', whiteOut: .3 } },
-  { kind: 'film', w: 'garg', shot: 'dive', u0: .55, u1: 1, d: 1.6, fx: { whiteIn: .35, warp: 'end', shake: 1 } },
-  { kind: 'black', d: .45 },
+  // ——— cold open: the climax of the music, the biggest images, no words (beat = 1 s, bar = 4 s) ———
+  { kind: 'film', w: 'garg', shot: 'flyby', u0: .30, u1: .80, d: 2 },
+  { kind: 'film', w: 'miller', shot: 'rise', u0: .62, u1: 1, d: 1, fx: { shake: 1 } },
+  { kind: 'film', w: 'saturn', shot: 'enter', u0: .45, u1: 1, d: 1, fx: { warp: 'ramp', whiteOut: .25 } },
+  { kind: 'film', w: 'dock', shot: 'dock', u0: .55, u1: .97, d: 2, fx: { whiteIn: .2 } },
+  { kind: 'film', w: 'garg', shot: 'dive', u0: .55, u1: 1, d: 1.5, fx: { warp: 'end', shake: 1 } },
+  { kind: 'black', d: .5 },
   // ——— it's a web page ———
-  { kind: 'reveal', w: 'garg', d: 1.6 },
-  { kind: 'explore', w: 'garg', d: 3.4, sub: 'phys' },             // click PHYSICAL, then dive in
-  { kind: 'explore', w: 'saturn', d: 2.3, click: 'saturn' },
-  { kind: 'explore', w: 'miller', d: 2.3, click: 'miller' },
-  { kind: 'explore', w: 'tess', d: 2.1, click: 'tess' },
-  { kind: 'explore', w: 'dust', d: 2.4, click: 'dust', tail: 'film' }, // ends by clicking 观看影片
+  { kind: 'reveal', w: 'garg', d: 2 },
+  { kind: 'explore', w: 'garg', d: 4, sub: 'phys' },              // click PHYSICAL, then dive toward the hole
+  { kind: 'explore', w: 'saturn', d: 2, click: 'saturn' },
+  { kind: 'explore', w: 'miller', d: 2, click: 'miller' },
+  { kind: 'explore', w: 'tess', d: 2, click: 'tess' },
+  { kind: 'explore', w: 'dock', d: 4, click: 'dock', tail: 'film' }, // the docking game, then 观看影片
   // ——— the film ———
-  { kind: 'film', w: 'earth', shot: 'dawn', u0: .30, u1: .95, d: 3.4, fx: { expand: 1 }, sub: ['收成一年比一年少，沙尘一年比一年厚。', 'Each harvest thinner. Each storm darker.'] },
-  { kind: 'film', w: 'saturn', shot: 'vista', u0: .25, u1: .70, d: 2.5, sub: ['土星旁边，有人为我们留下了一扇门。', 'Beside Saturn, someone had left us a door.'] },
-  { kind: 'film', w: 'saturn', shot: 'enter', u0: .15, u1: 1, d: 1.9, fx: { warp: 'ramp', whiteOut: .35 } },
-  { kind: 'film', w: 'miller', shot: 'calm', u0: .35, u1: .75, d: 1.7, fx: { whiteIn: .9 }, sub: ['这里的一小时，是地球上的七年。', 'One hour here is seven years on Earth.'] },
-  { kind: 'film', w: 'miller', shot: 'rise', u0: .15, u1: 1, d: 3.2, fx: { shake: 1 }, sub2: [['那不是山……', 'Those aren’t mountains…'], ['……是浪。', '…they’re waves.']], jump: ['地球时间 +23 年 4 个月 8 天', 'EARTH TIME +23 YEARS 4 MONTHS 8 DAYS'] },
-  { kind: 'black', d: .4 },
-  { kind: 'film', w: 'garg', shot: 'reveal', u0: .35, u1: 1, d: 3.0, fx: { fadeIn: .6 }, sub: ['卡冈图雅。一亿个太阳的质量，连光都无法逃离。', 'Gargantua. A hundred million suns. Not even light escapes.'] },
-  { kind: 'film', w: 'garg', shot: 'flyby', u0: .1, u1: .9, d: 2.5, sub: ['在它身边，时间不再是一个常数。', 'Near it, time is no longer a constant.'] },
-  { kind: 'film', w: 'garg', shot: 'dive', u0: .45, u1: 1, d: 2.0, fx: { warp: 'end', shake: 1, whiteOut: .35 }, jump: ['地球时间 +51 年', 'EARTH TIME +51 YEARS'] },
-  { kind: 'film', w: 'tess', shot: 'fall', u0: .03, u1: .45, d: 2.3, fx: { whiteIn: .9, warp: 'out' }, sub: ['引力能穿越时间——也许，爱也能。', 'Gravity crosses time — perhaps love does too.'] },
-  { kind: 'film', w: 'dust', shot: 'stay', u0: .40, u1: .80, d: 2.2, fx: { fadeIn: .5 }, morse: 1 },
-  { kind: 'film', w: 'dust', shot: 'stay', u0: .80, u1: 1, d: 3.4, end: 1 },
+  { kind: 'film', w: 'earth', shot: 'dawn', u0: .30, u1: .95, d: 2, fx: { expand: 1 } },
+  { kind: 'film', w: 'saturn', shot: 'vista', u0: .25, u1: .70, d: 2, sub: ['土星旁边，有人为我们留下了一扇门。', 'Beside Saturn, someone had left us a door.'] },
+  { kind: 'film', w: 'saturn', shot: 'enter', u0: .15, u1: 1, d: 2, fx: { warp: 'ramp', whiteOut: .3 } },
+  { kind: 'film', w: 'miller', shot: 'calm', u0: .35, u1: .75, d: 1, fx: { whiteIn: .6 } },
+  { kind: 'film', w: 'miller', shot: 'rise', u0: .15, u1: 1, d: 3, fx: { shake: 1 }, sub2: [['那不是山……', 'Those aren’t mountains…'], ['……是浪。', '…they’re waves.']], jump: ['地球时间 +23 年 4 个月 8 天', 'EARTH TIME +23 YEARS 4 MONTHS 8 DAYS'] },
+  { kind: 'film', w: 'dock', shot: 'wide', u0: 0, u1: 1, d: 2, sub: ['永恒号失控了，每分钟二十多转。', 'Endurance is tumbling — over twenty turns a minute.'] },
+  { kind: 'film', w: 'dock', shot: 'dock', u0: .2, u1: 1, d: 4, sub: ['匹配它的转速，然后，靠上去。', 'Match its spin. Then close in.'] },
+  { kind: 'film', w: 'garg', shot: 'reveal', u0: .35, u1: 1, d: 3, sub: ['卡冈图雅。一亿个太阳的质量，连光都无法逃离。', 'Gargantua. A hundred million suns. Not even light escapes.'] },
+  { kind: 'film', w: 'garg', shot: 'flyby', u0: .1, u1: .9, d: 2, sub: ['在它身边，时间不再是一个常数。', 'Near it, time is no longer a constant.'] },
+  { kind: 'film', w: 'garg', shot: 'dive', u0: .4, u1: 1, d: 3, fx: { warp: 'end', shake: 1, whiteOut: .3 }, jump: ['地球时间 +51 年', 'EARTH TIME +51 YEARS'] },
+  { kind: 'film', w: 'tess', shot: 'fall', u0: .03, u1: .4, d: 2, fx: { whiteIn: .7, warp: 'out' }, sub: ['引力能穿越时间——也许，爱也能。', 'Gravity crosses time — perhaps love does too.'] },
+  { kind: 'film', w: 'dust', shot: 'stay', u0: .42, u1: .80, d: 2, fx: { fadeIn: .3 }, morse: 1 },
+  { kind: 'film', w: 'dust', shot: 'stay', u0: .80, u1: 1, d: 4, end: 1 },
 ];
 let TL = [], PROMO_END = 0;
 function buildTimeline(cuts) {
@@ -56,7 +58,7 @@ export { PROMO_END };
 let A, curExplore = null, CLICKS = [];
 const fmtDate = y => { const yr = Math.floor(y); const doy = Math.floor((y - yr) * 365); const md = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; let m = 0, d = doy; while (m < 11 && d >= md[m]) { d -= md[m]; m++; } return `${yr}.${String(m + 1).padStart(2, '0')}.${String(d + 1).padStart(2, '0')}`; };
 function interp(keys, t) { if (t <= keys[0][0]) return keys[0][1]; for (let i = 1; i < keys.length; i++) if (t <= keys[i][0]) { const [a, va] = keys[i - 1], [b, vb] = keys[i]; const u = (t - a) / Math.max(1e-6, b - a); return va + (vb - va) * (u * u * (3 - 2 * u)); } return keys[keys.length - 1][1]; }
-const FILM_RANGE = { dawn: [14, 21.5], vista: [28, 35.5], enter: [41, 44], calm: [44, 49], rise: [52.5, 60], reveal: [60, 69.5], flyby: [69.5, 76], dive: [76, 84], fall: [84, 92.5], drift: [92.5, 100], stay: [100, 112] };
+const FILM_RANGE = { wide: [60, 63.2], dock: [63.2, 70], dawn: [14, 21.5], vista: [28, 35.5], enter: [41, 44], calm: [44, 49], rise: [52.5, 60], reveal: [70, 79.5], flyby: [79.5, 86], dive: [86, 94], fall: [94, 102.5], drift: [102.5, 110], stay: [110, 122] };
 
 export async function setup(api) {
   A = api;
@@ -139,6 +141,10 @@ function exploreCamera(id, u, w, s) {
     c.position.set(2.0 + Math.sin(u * 2) * .2, 1.55 + u * .3, -1 - u * 4.5);
     c.up.set(Math.sin(u) * .25, 1, 0).normalize();
     c.lookAt(tmp.set(2.2, 1.3, c.position.z - 6)); c.fov = 62;
+  } else if (id === 'dock') {
+    const st = w.autoAt(lerp(.25, .97, u)), prev = w.autoAt(lerp(.25, .97, Math.max(0, u - .02)));
+    Object.assign(w.G, st, { auto: true, state: st.docked ? 'docked' : 'approach', msg: st.docked ? 'docked' : '', msgT: 0, vz: (st.z - prev.z) / (.02 * s.d), shake: 0 });
+    w.setAuto(true);
   } else if (id === 'dust') {
     const a = lerp(.35, .05, ease(u)), d = lerp(3.2, 2.7, u);
     c.position.set(Math.sin(a) * d, lerp(2.6, 2.8, u), -.3 + Math.cos(a) * d);
@@ -267,7 +273,7 @@ export async function cover(api, kind) {
   document.head.appendChild(css);
   const cv = document.createElement('div'); cv.id = 'cv';
   cv.innerHTML = `<div class="k">ENDURANCE · REAL-TIME WEBGL</div><div class="a">我用 AI 写了一个网页</div><div class="b">实时<em>算出</em>黑洞</div>
-    <div class="s">史瓦西时空光线追踪 · <b>每一帧都在浏览器里实时计算</b> · three.js</div>`;
+    <div class="s">旋转黑洞 · 克尔时空光线追踪 · <b>每一帧都在浏览器里实时计算</b> · three.js</div>`;
   document.body.appendChild(cv);
   await document.fonts.ready;
   const w = W.garg, c = w.camera;

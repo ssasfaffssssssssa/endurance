@@ -13,6 +13,7 @@ const CTX = {
   saturn: { dest: '虫洞 → 卡冈图雅星系', earth: 2069.82, met: 2.04, fuel: 71, o2: 88, sig: '79 min', focus: '虫洞', planets: [0, 0, 0], ship: 'NOMINAL' },
   miller: { dest: '米勒星球 · 海洋', earth: 2093.17, met: 2.06, fuel: 54, o2: 81, sig: '经虫洞 · 单向', focus: '潮汐巨浪', planets: [1, 0, 0], ship: 'RANGER DOWN' },
   garg: { dest: '卡冈图雅 · 弹弓变轨', earth: 2144.3, met: 2.4, fuel: 23, o2: 64, sig: '无法建立', focus: '卡冈图雅', planets: [2, 2, 1], ship: 'SLINGSHOT' },
+  dock: { dest: '永恒号 · 紧急对接', earth: 2093.4, met: 2.3, fuel: 31, o2: 58, sig: '近距离 · 实时', focus: '对接口', planets: [2, 1, 0], ship: 'TUMBLING' },
   tess: { dest: '超立方体 · 视界之内', earth: NaN, met: NaN, fuel: 0, o2: 12, sig: '引力 · 跨越时间', focus: '时间之线', planets: [2, 2, 1], ship: 'TARS LINKED' },
 };
 const CREW = ['COOPER', 'BRAND', 'ROMILLY', 'DOYLE', 'TARS', 'CASE'];
@@ -141,7 +142,7 @@ export function createHUD() {
       const { r, f } = stats;
       const pretty = f < 48 ? f.toFixed(3) + ' 小时' : (f / 24).toFixed(1) + ' 天';
       rel = R('距奇点 r', r.toFixed(2) + ' rₛ') + R('时间膨胀 γ', f.toFixed(4) + '×', 'big') + R('你的 1 小时 =', '地球 ' + pretty) +
-        R('质量', '1.0 × 10⁸ M☉') + R('史瓦西半径', '2.95 × 10⁸ km');
+        R('自旋 a/M', world.spin.toFixed(2)) + R('最内稳定轨道', (world.uniforms.uRin.value).toFixed(2) + ' rₛ') + R('质量', '1.0 × 10⁸ M☉');
       extra = { r };
     } else if (id === 'saturn') {
       head = 'GRAVITATIONAL LENS · 引力透镜';

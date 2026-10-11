@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { QUAD_VERT, BH_FRAG } from '../glsl/common.js';
-import { createEndurance } from '../endurance.js';
+import { QUAD_VERT, BH_FRAG, iscoRs } from '../glsl/common.js';
+import { createEndurance, rigShadow, updateShadow, animateEndurance } from '../endurance.js';
 import { bindRay } from '../util.js';
 
 export const RS = 100;
@@ -13,7 +13,7 @@ export function createGargantua() {
     uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uCamPos: { value: new THREE.Vector3() },
     uPixAng: { value: .001 }, uTime: { value: 0 }, uStarGain: { value: 1 },
     uDoppler: { value: 0 }, uDiskGain: { value: 1 }, uDiskTime: { value: 0 }, uDiskTilt: { value: 0 },
-    uDiskOuter: { value: 13 }, uDiskTemp: { value: 5200 },
+    uDiskOuter: { value: 13 }, uDiskTemp: { value: 5200 }, uSpin: { value: .8 }, uRin: { value: iscoRs(.8) },
     uBHPos: { value: new THREE.Vector3() }, uBHScale: { value: RS }, uBHRot: { value: new THREE.Matrix3() },
   };
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
@@ -25,6 +25,7 @@ export function createGargantua() {
   ship.scale.setScalar(1);
   scene.add(ship);
   const key = new THREE.DirectionalLight(0xffc48a, 4.2); scene.add(key); scene.add(key.target);
+  rigShadow(key, ship);
   const rim = new THREE.DirectionalLight(0x9fb8ff, .5); rim.position.set(1, 2, -1); scene.add(rim);
   scene.add(new THREE.HemisphereLight(0xffd8b0, 0x0a0c14, .25));
 
@@ -90,6 +91,8 @@ export function createGargantua() {
     shots,
     explore: { target: new THREE.Vector3(0, 0, 0), pos: sph(48, -1.6, .07), min: 2.2 * RS, max: 120 * RS, fov: 24 },
     setDoppler(v) { dopplerTarget = v; },
+    setSpin(v) { uniforms.uSpin.value = v; uniforms.uRin.value = iscoRs(v); },
+    get spin() { return uniforms.uSpin.value; },
     get doppler() { return dopplerTarget; },
     showShipExplore: true,
     update(t, dt, mode) {
@@ -109,6 +112,8 @@ export function createGargantua() {
         ship.quaternion.copy(q0).slerp(q1, window.__record ? 1 : Math.min(1, dt * 3));
         lightFromDisk();
       }
+      animateEndurance(ship, t);
+      if (ship.visible) updateShadow(key);
       bindRay(uniforms, camera);
     },
     markers(cam) {

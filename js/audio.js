@@ -88,6 +88,20 @@ function buildScore() {
   let mt = 104.2;
   ['...', '-', '.-', '-.--'].forEach(l => { [...l].forEach(c => { add(mt, 'beep', { dur: c === '.' ? .09 : .27 }); mt += (c === '.' ? .09 : .27) + .09; }); mt += .2; });
 
+  // the docking chapter (60–70) is inserted into the timeline: everything after the wave moves 10 s later
+  E.forEach(e => { if (e.t >= 60.2) e.t += 10; });
+  // DOCKING — a pulse that tightens as the spins converge
+  add(60.4, 'rumble', { dur: 9.4, vel: .5 });
+  organ(60.6, 9.3, 'A0', .3, 'pedal', { att: 1.5, rel: .05 });
+  organ(60.6, 9.3, ch('A2 E3'), .1, 'principal', { att: 2, rel: .05 });
+  const dk = ch('A4 E5 A4 C5 A4 E5 B4 E5');
+  for (let k = 0; k < 37; k++) {
+    const t = 60.8 + k * .25;
+    organ(t, .3, dk[k % 8], .035 + k * .0022, k > 20 ? 'principal' : 'flute', { att: .01, rel: .35 });
+    if (k % 2 === 0) add(t, 'tick', { vel: .3 + k * .012, f: 2800 });
+  }
+  organ(65.2, 4.7, ch('C4 E4 A4'), .07, 'reed', { att: 3.5, rel: .05 });
+  add(67.4, 'swell', { dur: 2.55, f0: 120, f1: 5000, vel: .45, cut: true });
   E.sort((a, b) => a.t - b.t);
   return E;
 }

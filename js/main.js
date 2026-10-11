@@ -10,6 +10,7 @@ import { createSaturn } from './worlds/saturn.js';
 import { createMiller } from './worlds/miller.js';
 import { createGargantua, RS } from './worlds/gargantua.js';
 import { createTesseract } from './worlds/tesseract.js';
+import { createDock } from './worlds/dock.js';
 import { createHUD } from './hud.js';
 import { applyEnvironments } from './env.js';
 const DEV = new URLSearchParams(location.search);
@@ -26,8 +27,10 @@ const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false });
 if (!renderer.capabilities.isWebGL2) { $('ld-status').textContent = '需要 WebGL2 · WEBGL2 REQUIRED'; throw new Error('WebGL2 required'); }
 renderer.setClearColor(0x000000, 1);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const post = createPost(renderer);
 const TOUCH = matchMedia('(pointer: coarse)').matches;
+if (TOUCH) document.body.classList.add('touch');
 const DPR = Math.min(devicePixelRatio || 1, 2);
 let quality = TOUCH ? .7 : 1;          // adaptive multiplier
 let curPR = 0;
@@ -36,7 +39,7 @@ let curPR = 0;
 const ldFill = $('ld-fill'), ldStatus = $('ld-status');
 const step = (p, msg) => { ldFill.style.width = (p * 100) + '%'; ldStatus.textContent = msg; return new Promise(r => setTimeout(r, 30)); };
 const W = {};
-const order = ['dust', 'earth', 'saturn', 'miller', 'garg', 'tess'];
+const order = ['dust', 'earth', 'saturn', 'miller', 'dock', 'garg', 'tess'];
 async function load() {
   await step(.05, '积分零测地线 · INTEGRATING NULL GEODESICS');
   W.garg = createGargantua();
@@ -50,6 +53,8 @@ async function load() {
   W.miller = createMiller();
   await step(.72, '折叠五维空间 · FOLDING FIVE DIMENSIONS');
   W.tess = createTesseract();
+  await step(.74, '启动对接程序 · ARMING THE DOCKING SEQUENCE');
+  W.dock = createDock();
   applyEnvironments(renderer, W);
   resize();
   let i = 0;
@@ -127,7 +132,7 @@ function transition(t) {
   if (s[4] === 'hold') fade = into < 1.2 ? 1 : Math.max(0, 1 - (into - 1.2) / 1.6);
   if (next && next[4] === 'black') fade = Math.max(fade, 1 - left / .8);
   if (next && next[4] === 'white') { const k = 1 - left / .45; if (k > 0) { fade = Math.max(fade, k); white = true; } }
-  if (t > 105.6) fade = Math.max(fade, smooth(105.6, 107.6, t) * .74);
+  if (t > 115.6) fade = Math.max(fade, smooth(115.6, 117.6, t) * .74);
   if (t > DURATION - 1.8) fade = Math.max(fade, smooth(DURATION - 1.8, DURATION - .1, t));
   return { fade: clamp(fade, 0, 1), white };
 }
@@ -135,7 +140,7 @@ function fx(t, s, u) {
   let warp = 0, shake = 0;
   if (s[2] === 'saturn' && s[3] === 'enter') warp = Math.pow(u, 2.2);
   if (s[2] === 'garg' && s[3] === 'dive') { warp = smooth(.78, 1, u) * .9; shake = smooth(.6, 1, u) * .6; }
-  if (s[2] === 'tess' && s[3] === 'fall') warp = Math.max(0, 1 - (t - 84) / 1.8);
+  if (s[2] === 'tess' && s[3] === 'fall') warp = Math.max(0, 1 - (t - 94) / 1.8);
   if (s[2] === 'miller' && s[3] === 'rise') shake = smooth(.35, 1, u) * .7;
   if (s[2] === 'miller' && s[3] === 'calm') warp = Math.max(0, 1 - (t - 44) / 1.2) * .8;
   return { warp, shake };
@@ -146,7 +151,7 @@ const cp = $('chapter'), sub = $('sub'), jump = $('jump'), dec = $('decode'), tc
 let lastCh = -1, lastSub = -1, lastTickN = -1;
 const fmtDate = y => { const yr = Math.floor(y); const f = y - yr; const doy = Math.floor(f * 365); const mdays = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; let m = 0, d = doy; while (m < 11 && d >= mdays[m]) { d -= mdays[m]; m++; } return `${yr}.${String(m + 1).padStart(2, '0')}.${String(d + 1).padStart(2, '0')}`; };
 const fmtShip = y => { const yr = Math.floor(y), mo = Math.floor((y - yr) * 12), d = Math.floor(((y - yr) * 12 - mo) * 30.4); return `+${yr}Y ${mo}M ${d}D`; };
-const MORSE_T = (() => { const out = []; let mt = 104.2; ['...', '-', '.-', '-.--'].forEach((l, i) => { [...l].forEach(c => mt += (c === '.' ? .09 : .27) + .09); out.push([mt, 'STAY'[i]]); mt += .2; }); return out; })();
+const MORSE_T = (() => { const out = []; let mt = 114.2; ['...', '-', '.-', '-.--'].forEach((l, i) => { [...l].forEach(c => mt += (c === '.' ? .09 : .27) + .09); out.push([mt, 'STAY'[i]]); mt += .2; }); return out; })();
 function filmUI(t) {
   // chapter cards
   let ci = -1; CHAPTERS.forEach((c, i) => { if (t >= c.t + .9 && t < c.t + 4.6) ci = i; });
@@ -155,11 +160,11 @@ function filmUI(t) {
   let si = SUBS.findIndex(s => t >= s[0] && t < s[1]);
   if (si !== lastSub) { lastSub = si; if (si >= 0) { $('sb-zh').textContent = SUBS[si][2]; $('sb-en').textContent = SUBS[si][3]; sub.classList.add('on'); } else sub.classList.remove('on'); }
   // clocks
-  const inTess = t >= 84 && t < 100;
+  const inTess = t >= 94 && t < 110;
   clockEl.classList.toggle('glitch', inTess);
   $('ck-earth').textContent = inTess ? (Math.random() > .5 ? '∞' : fmtDate(2067 + Math.random() * 90)) : fmtDate(interp(EARTH_CLOCK, t));
   $('ck-ship').textContent = inTess ? '— — —' : fmtShip(interp(SHIP_CLOCK, t));
-  clockEl.style.opacity = t < 1.5 || t > 104 ? 0 : 1;
+  clockEl.style.opacity = t < 1.5 || t > 114 ? 0 : 1;
   if (t >= 44.6 && t < 60) { const n = Math.floor((t - 44.6) / 1.25); if (n !== lastTickN) { lastTickN = n; const el = $('ck-tick'); el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); } }
   // time jumps
   const j = JUMPS.find(j => t >= j.t && t < j.t + 3.6);
@@ -167,9 +172,9 @@ function filmUI(t) {
   jump.classList.toggle('on', !!j);
   // decoding: binary in the prologue, STAY in the epilogue
   if (t >= 11.1 && t < 13.9) { const k = Math.min(12, Math.floor((t - 11.1) / .2) + 1); dec.innerHTML = [1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0].slice(0, k).join(' ') + '<small>BINARY · 坐标</small>'; dec.classList.add('on'); }
-  else if (t >= 104.2 && t < 106.6) { const s = MORSE_T.filter(m => t >= m[0]).map(m => m[1]).join(' '); dec.innerHTML = (s || '&nbsp;') + '<small>· · · &nbsp;— &nbsp;· — &nbsp;— · — —</small>'; dec.classList.add('on'); }
+  else if (t >= 114.2 && t < 116.6) { const s = MORSE_T.filter(m => t >= m[0]).map(m => m[1]).join(' '); dec.innerHTML = (s || '&nbsp;') + '<small>· · · &nbsp;— &nbsp;· — &nbsp;— · — —</small>'; dec.classList.add('on'); }
   else dec.classList.remove('on');
-  tcard.classList.toggle('on', t >= 106.8 && t < 111.4);
+  tcard.classList.toggle('on', t >= 116.8 && t < 121.4);
   // transport
   $('track-fill').style.width = (t / DURATION * 100) + '%';
   const f = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -181,6 +186,7 @@ function filmUI(t) {
 })();
 
 function startFilm(from = 0) {
+  const gw = W[exploreWorld]; if (gw && gw.exit) gw.exit();
   score.init(); score.resume(); setMuted(muted);
   score.ambience(null);
   disposeControls();
@@ -213,15 +219,19 @@ function enterExplore(id = exploreWorld) {
   setState('explore'); barsOn = false; updateBars();
   selectWorld(id);
 }
-const AMB = { dust: 'A1 E3 A3 B3 E4', earth: 'F1 C3 F3 A3 E4', saturn: 'G1 D3 G3 B3 D4', miller: 'D2 A3 D4 E4 F4', garg: 'A0 E2 A2 C4 E4', tess: 'C2 G3 C4 E4 B4' };
+const AMB = { dock: 'A0 E2 A2 E3 B3', dust: 'A1 E3 A3 B3 E4', earth: 'F1 C3 F3 A3 E4', saturn: 'G1 D3 G3 B3 D4', miller: 'D2 A3 D4 E4 F4', garg: 'A0 E2 A2 C4 E4', tess: 'C2 G3 C4 E4 B4' };
 function selectWorld(id) {
+  const prev = W[exploreWorld];
+  if (prev && prev.exit && prev !== W[id]) prev.exit();
   exploreWorld = id;
   const w = W[id]; current = w;
   disposeControls();
   const cam = w.camera;
   cam.up.set(0, 1, 0);
   cam.position.copy(w.explore.pos); cam.fov = w.explore.fov || 40; cam.updateProjectionMatrix();
-  controls = new OrbitControls(cam, canvas);
+  if (w.game) { w.enter(); exploreStart = performance.now(); }
+  controls = w.game ? null : new OrbitControls(cam, canvas);
+  if (controls) {
   controls.target.copy(w.explore.target);
   controls.enableDamping = true; controls.dampingFactor = .06;
   controls.minDistance = w.explore.min; controls.maxDistance = w.explore.max;
@@ -230,6 +240,7 @@ function selectWorld(id) {
   if (id === 'miller') { controls.maxPolarAngle = Math.PI * .495; }
   if (id === 'dust') { controls.maxPolarAngle = Math.PI * .47; }
   controls.update();
+  }
   w.explore._init = true;
   resize();
   // overlay
@@ -239,8 +250,8 @@ function selectWorld(id) {
   $('if-text').textContent = I.text; $('if-text-en').textContent = I.textEn;
   buildCtrl(id);
   hud.select(id, w);
-  setMode('orbit');
-  controls.addEventListener('start', () => setMode('free'));
+  setMode(w.game ? 'free' : 'orbit');
+  if (controls) controls.addEventListener('start', () => setMode('free'));
   score.ambience(AMB[id]);
   exploreStart = performance.now();
 }
@@ -255,6 +266,10 @@ function buildCtrl(id) {
     const a = tog('电影 CINEMATIC', W.garg.doppler < .5, () => { W.garg.setDoppler(0); a.classList.add('on'); b.classList.remove('on'); });
     const b = tog('物理 PHYSICAL', W.garg.doppler >= .5, () => { W.garg.setDoppler(1); b.classList.add('on'); a.classList.remove('on'); });
     tog('永恒号 SHIP', W.garg.showShipExplore, el => { W.garg.showShipExplore = !W.garg.showShipExplore; el.classList.toggle('on', W.garg.showShipExplore); });
+    const spins = [[0, '自旋 0'], [.8, '0.8'], [.99, '0.99']].map(([v, l]) => {
+      const el = tog(l, Math.abs(W.garg.spin - v) < .01, () => { W.garg.setSpin(v); spins.forEach(x => x.classList.toggle('on', x === el)); });
+      el.classList.add('spin'); return el;
+    });
   }
   if (id === 'dust') {
     tog('二进制 BINARY', true, el => { W.dust.setExplorePattern(0); el.classList.add('on'); el.nextSibling.classList.remove('on'); });
@@ -271,6 +286,7 @@ function hudStats(id, w) {
   else if (id === 'miller') { st.front = w.front; st.range = Math.round(cam.position.distanceTo(controls ? controls.target : w.explore.target)) + ' m'; }
   else if (id === 'earth') { st.alt = (cam.position.length() - 100) * 63.71; st.range = Math.round(st.alt).toLocaleString() + ' km'; }
   else if (id === 'tess') st.range = '∞';
+  else if (id === 'dock') st.range = w.G.z.toFixed(1) + ' m';
   else if (id === 'dust') { st.pattern = w.morse ? w.patternB : w.pattern; st.morse = w.morse; st.range = cam.position.distanceTo(w.explore.target).toFixed(2) + ' m'; }
   return st;
 }
@@ -282,7 +298,7 @@ function telemetry(dt, secsOverride, force) {
   hud.update(dt, secs, w.camera, st, force);
 }
 function setMode(m) {
-  if (m === 'film') { const ch = { dust: 0, earth: 14, saturn: 28, miller: 44, garg: 60, tess: 84 }[exploreWorld]; startFilm(ch); return; }
+  if (m === 'film') { const ch = { dust: 0, earth: 14, saturn: 28, miller: 44, dock: 60, garg: 70, tess: 94 }[exploreWorld]; startFilm(ch); return; }
   if (controls) controls.autoRotate = m === 'orbit';
   document.querySelectorAll('.md').forEach(b => b.classList.toggle('on', b.dataset.m === m));
   $('o-mode').textContent = m === 'orbit' ? 'ORBIT' : 'FREE';
@@ -326,7 +342,7 @@ addEventListener('keydown', e => {
   else if ((k === 'e' || k === 'E') && state === 'explore') setMode('free');
   else if (k === 'f' || k === 'F') { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); }
   else if (k === 'Escape' && state === 'film') enterExplore(shotAt(filmT)[2]);
-  else if (state === 'explore' && /^[1-6]$/.test(k)) selectWorld(order[+k - 1]);
+  else if (state === 'explore' && /^[1-7]$/.test(k) && !(W[exploreWorld] && W[exploreWorld].game && 'qwes'.includes(k))) selectWorld(order[+k - 1]);
 });
 document.addEventListener('visibilitychange', () => { if (!DEV.has('dev') && document.hidden && state === 'film' && playing) togglePlay(); });
 

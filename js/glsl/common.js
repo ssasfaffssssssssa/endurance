@@ -94,7 +94,10 @@ uniform float uDiskTime;
 uniform float uDiskTilt;
 uniform float uDiskOuter;
 uniform float uDiskTemp;
-const float RIN = 3.0;
+uniform float uSpin;         // a/M, 0 = Schwarzschild, ->1 = extremal Kerr
+uniform float uRin;          // prograde ISCO in r_s units (computed on the CPU)
+#define RIN uRin
+const float BHM = .5;        // M in r_s units (r_s = 2M = 1)
 
 float diskDensity(float r, float ang, float t){
   float om = sqrt(.5/(r*r*r));
@@ -107,104 +110,128 @@ float diskDensity(float r, float ang, float t){
   float lr = log(r);
   vec3 q1 = vec3(cos(a1)*3.0, sin(a1)*3.0, lr*16.);
   vec3 q2 = vec3(cos(a2)*3.0, sin(a2)*3.0, lr*16.+7.3);
-  float n1 = fbm(q1 + vec3(0.,0.,0.)), n2 = fbm(q2);
-  float n = mix(n1, n2, w);
+  float n = mix(fbm(q1), fbm(q2), w);
   float rings = .6 + .4*sin(lr*120. + n*11.);
   float fine = mix(vnoise(vec3(cos(a1)*10., sin(a1)*10., lr*70.)), vnoise(vec3(cos(a2)*10., sin(a2)*10., lr*70.+3.)), w);
   float clump = smoothstep(.25, .85, n);
   float d = (.3 + 1.45*clump) * (.8 + .2*rings) * (.8 + .4*fine);
-  // radial envelope
-  float inner = smoothstep(RIN, RIN*1.3, r);
+  float inner = smoothstep(RIN, RIN*1.3 + .2, r);
   float outer = 1. - smoothstep(uDiskOuter*.45, uDiskOuter, r);
   return clamp(d, 0., 2.) * inner * outer;
 }
 
-vec4 diskShade(vec3 c, vec3 v){
-  float r = length(c.xz);
+// lam = photon's angular momentum about the spin axis (per unit energy), as seen by the real, incoming photon
+vec4 diskShade(vec3 c, vec3 v, float r, float lam){
   float ang = atan(c.z, c.x);
   float dens = diskDensity(r, ang, uDiskTime);
   if (dens < .002) return vec4(0.);
-  // Novikov–Thorne-ish temperature profile
   float x = max(0., 1. - sqrt(RIN/r));
   float T = uDiskTemp * pow(RIN/r, .75) * pow(x + .015, .25) * 1.9;
-  // Doppler & gravitational shift
-  float beta = clamp(sqrt(.5/max(r-1., .5)), 0., .62);
-  vec3 vel = normalize(vec3(-c.z, 0., c.x));
-  float cth = dot(vel, -normalize(v));
-  float gam = 1./sqrt(1.-beta*beta);
-  float D = 1./(gam*(1. - beta*cth));
-  float g = D * sqrt(max(1. - 1./r, .05));
-  float gs = mix(1., g, uDoppler);
+  // exact redshift of a prograde circular equatorial orbit in Kerr, seen from infinity
+  float a = uSpin*BHM, sM = sqrt(BHM), r15 = r*sqrt(r);
+  float Om = sM/(r15 + a*sM);
+  float ut = (r15 + a*sM) / (pow(r, .75) * sqrt(max(r15 - 3.*BHM*sqrt(r) + 2.*a*sM, 1e-3)));
+  float g = 1./(ut*max(1. - Om*lam, .05));
+  float gs = mix(1., clamp(g, .1, 3.), uDoppler);
   float Tobs = T * mix(1., gs, .85);
   vec3 col = blackbody(Tobs);
   col /= max(max(col.r, col.g), col.b);
   float I = pow(T/uDiskTemp, 2.2) * pow(gs, mix(0., 3.5, uDoppler));
-  // cinematic grade: keep it warm, white-hot near ISCO
   col = mix(col, vec3(1.,.82,.58), .35*(1.-uDoppler));
-  float a = clamp(dens*.75, 0., .97);
-  return vec4(col * I * dens * uDiskGain * 2.1, a);
+  // optically thin slab: grazing rays cross more glowing gas
+  float graze = clamp(1./max(abs(normalize(v).y), .08), 1., 9.);
+  float a0 = clamp(dens*.75, 0., .97);
+  return vec4(col * I * dens * uDiskGain * 2.1 * (.9 + .045*graze), clamp(a0 * (.9 + .03*graze), 0., .97));
 }
 
-// ro, rd in black-hole space (r_s units, disk in y=0 plane)
-// returns rgb, plus outDir for sky lookup and a = 1 if captured by horizon
+// ——— Kerr in Kerr–Schild coordinates (spin axis = +y) ———
+// g^{uv} = eta^{uv} - f l^u l^v ;  H = 1/2 (|p|^2 - 1 - f L^2),  L = 1 + l.p   (p_t = -1)
+float ksR(vec3 x, float a){ float b = dot(x, x) - a*a; return sqrt(.5*(b + sqrt(b*b + 4.*a*a*x.y*x.y))); }
+void ksFL(vec3 x, float a, out float f, out vec3 l, out float r){
+  r = max(ksR(x, a), 1e-4);
+  float r2 = r*r;
+  f = 2.*BHM*r2*r/(r2*r2 + a*a*x.y*x.y);
+  float d = 1./(r2 + a*a);
+  l = vec3((r*x.x + a*x.z)*d, x.y/r, (r*x.z - a*x.x)*d);
+}
+float ksF(vec3 x, vec3 p, float a){ float f, r; vec3 l; ksFL(x, a, f, l, r); float L = 1. + dot(l, p); return f*L*L; }
+void ksDeriv(vec3 x, vec3 p, float a, out vec3 dx, out vec3 dp, out float r){
+  float f; vec3 l; ksFL(x, a, f, l, r);
+  float L = 1. + dot(l, p);
+  dx = p - f*L*l;
+  float e = 1e-3*max(r, .4);
+  dp = vec3(ksF(x + vec3(e,0,0), p, a) - ksF(x - vec3(e,0,0), p, a),
+            ksF(x + vec3(0,e,0), p, a) - ksF(x - vec3(0,e,0), p, a),
+            ksF(x + vec3(0,0,e), p, a) - ksF(x - vec3(0,0,e), p, a)) * (.25/e);
+}
+
+// ro, rd in black-hole space (r_s units, disk in the y=0 plane)
 vec3 traceBH(vec3 ro, vec3 rd, out vec3 outDir, out float captured, out float minR, const int STEPS){
   captured = 0.; minR = 1e5;
-  vec3 p = ro, v = rd;
+  vec3 x = ro, v = rd;
   vec3 acc = vec3(0.); float alpha = 0.;
   float R0 = max(uDiskOuter*1.6, 28.);
-  // fast-forward along the straight line to the interaction sphere
-  float b0 = dot(p, v);
-  float c0 = dot(p, p) - R0*R0;
+  float b0 = dot(x, v), c0 = dot(x, x) - R0*R0;
   if (c0 > 0.){
     float disc = b0*b0 - c0;
     if (disc < 0. || b0 > 0.){
-      // never enters: weak-field deflection only (2 r_s / b)
-      float bimp = length(cross(p, v));
-      vec3 toC = normalize(-p - v*dot(-p, v));
+      float bimp = length(cross(x, v));
+      vec3 toC = normalize(-x - v*dot(-x, v));
       outDir = normalize(v + toC*tan(min(2./max(bimp, 1.), 1.2)));
       minR = bimp;
       return vec3(0.);
     }
-    p += v * (-b0 - sqrt(disc));
-    // bending accumulated on the way in (weak field)
-    float bi = length(cross(p, v));
-    float cpsi = clamp(-dot(p, v)/length(p), 0., 1.);
-    vec3 toC = normalize(-p - v*dot(-p, v));
+    x += v*(-b0 - sqrt(disc));
+    float bi = length(cross(x, v));
+    float cpsi = clamp(-dot(x, v)/length(x), 0., 1.);
+    vec3 toC = normalize(-x - v*dot(-x, v));
     v = normalize(v + toC*(1. - cpsi)/max(bi, 1.));
   }
-  vec3 h = cross(p, v); float h2 = dot(h, h);
+  // backward tracing in Kerr = forward tracing with the spin reversed
+  float a = -uSpin*BHM;
+  float rh = BHM + sqrt(max(BHM*BHM - a*a, 0.));
+  // momentum normalised so the ray is null: (1 - f q^2) s^2 - 2 f q s - (1 + f) = 0
+  float f0, r0; vec3 l0; ksFL(x, a, f0, l0, r0);
+  float q = dot(v, l0);
+  float A = 1. - f0*q*q;
+  float s = (f0*q + sqrt(f0*f0*q*q + A*(1. + f0))) / A;
+  vec3 p = v*s;
+  vec3 dx = v; float r = r0; bool escaped = false;
   for (int i = 0; i < STEPS; i++){
-    float r2 = dot(p, p); float r = sqrt(r2);
-    minR = min(minR, r);
-    if (r < 1.0){ captured = 1.; break; }
-    if (r > R0*1.05 && dot(p, v) > 0.) break;
-    float dt = clamp((r - 1.)*0.065, 0.01, 0.9);
-    // shrink near the disk plane so thin structures are not skipped
-    vec3 a = -1.5*h2*p/(r2*r2*r);
-    vec3 pn = p + v*dt + .5*a*dt*dt;
-    float rn2 = dot(pn, pn); float rn = sqrt(rn2);
-    vec3 an = -1.5*h2*pn/(rn2*rn2*rn);
-    vec3 vn = v + .5*(a + an)*dt;
-    if (p.y*pn.y < 0.){
-      float tc = p.y/(p.y - pn.y);
-      vec3 c = mix(p, pn, tc);
-      float rc = length(c.xz);
+    vec3 dx1, dp1; float r1;
+    ksDeriv(x, p, a, dx1, dp1, r1);
+    r = r1; minR = min(minR, r);
+    if (r < rh*1.03){ captured = 1.; break; }
+    if (r > R0*1.05 && dot(x, dx1) > 0.){ dx = dx1; escaped = true; break; }
+    float h = clamp((r - rh)*.075, .006, .9);
+    vec3 dx2, dp2; float r2;
+    ksDeriv(x + .5*h*dx1, p + .5*h*dp1, a, dx2, dp2, r2);
+    vec3 xn = x + h*dx2;
+    vec3 pn = p + h*dp2;
+    if (x.y*xn.y < 0.){
+      float tc = x.y/(x.y - xn.y);
+      vec3 c = mix(x, xn, tc);
+      float rc = ksR(c, a);
       if (rc > RIN && rc < uDiskOuter){
-        vec4 ds = diskShade(c, mix(v, vn, tc));
-        acc += (1. - alpha) * ds.rgb;
-        alpha += (1. - alpha) * ds.a;
+        vec3 pc = mix(p, pn, tc);
+        // the real photon carries the opposite angular momentum of the traced one
+        float lam = -(-c.z*pc.x + c.x*pc.z);
+        vec4 ds = diskShade(c, dx2, rc, lam);
+        acc += (1. - alpha)*ds.rgb;
+        alpha += (1. - alpha)*ds.a;
         if (alpha > .985) break;
       }
     }
-    p = pn; v = vn;
+    x = xn; p = pn; dx = dx2;
   }
-  v = normalize(v);
+  // a ray still bound after all steps has been wound up by the photon sphere: treat as captured
+  if (!escaped && alpha < .985) captured = 1.;
+  v = normalize(dx);
   if (captured < .5){
-    // remaining bending on the way out
-    float bo = length(cross(p, v));
-    float cpsi = clamp(dot(p, v)/length(p), 0., 1.);
-    vec3 toC = -p - v*dot(-p, v);
-    if (dot(toC,toC) > 1e-8) v = normalize(v + normalize(toC)*(1. - cpsi)/max(bo, 1.));
+    float bo = length(cross(x, v));
+    float cpsi = clamp(dot(x, v)/length(x), 0., 1.);
+    vec3 toC = -x - v*dot(-x, v);
+    if (dot(toC, toC) > 1e-8) v = normalize(v + normalize(toC)*(1. - cpsi)/max(bo, 1.));
   }
   outDir = v;
   if (captured > .5) alpha = 1.;
@@ -212,6 +239,14 @@ vec3 traceBH(vec3 ro, vec3 rd, out vec3 outDir, out float captured, out float mi
   return acc;
 }
 `;
+
+// prograde ISCO (Bardeen–Press–Teukolsky), returned in r_s units
+export function iscoRs(chi) {
+  chi = Math.min(.998, Math.max(0, chi));
+  const z1 = 1 + Math.cbrt(1 - chi * chi) * (Math.cbrt(1 + chi) + Math.cbrt(1 - chi));
+  const z2 = Math.sqrt(3 * chi * chi + z1 * z1);
+  return (3 + z2 - Math.sqrt((3 - z1) * (3 + z1 + 2 * z2))) * .5;
+}
 
 export const BH_FRAG = /* glsl */`
 ${NOISE}

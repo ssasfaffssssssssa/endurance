@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { NOISE, RAY, SKY, QUAD_VERT } from '../glsl/common.js';
-import { createEndurance } from '../endurance.js';
+import { createEndurance, rigShadow, updateShadow, animateEndurance } from '../endurance.js';
 import { bindRay, ease, lerp } from '../util.js';
 
 const SR = 1000;                         // Saturn radius
@@ -179,7 +179,8 @@ export function createSaturn() {
   wh.position.copy(WH); wh.renderOrder = 2; scene.add(wh);
 
   const ship = createEndurance(); scene.add(ship);
-  const sun = new THREE.DirectionalLight(0xfff1dc, 3.2); sun.position.copy(SUN).multiplyScalar(100); scene.add(sun);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 3.2); sun.position.copy(SUN).multiplyScalar(100); scene.add(sun); scene.add(sun.target);
+  rigShadow(sun, ship);
   scene.add(new THREE.HemisphereLight(0xd9c7a0, 0x05070c, .18)); // Saturn-shine
 
   const tmp = new THREE.Vector3();
@@ -252,6 +253,7 @@ export function createSaturn() {
         ship.position.lerp(p, ship.userData._init && !window.__record ? Math.min(1, dt * 4) : 1); ship.userData._init = true;
         orient(ringAxis(fwd, up, .5));
       }
+      animateEndurance(ship, t); updateShadow(sun);
       bindRay(skyU, camera);
     },
   };

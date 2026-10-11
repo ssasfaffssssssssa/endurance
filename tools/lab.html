@@ -8,12 +8,15 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createPost } from '../js/post.js';
 const q = new URLSearchParams(location.search);
 const W = q.get('w') || 'garg';
-const mods = { garg: ['../js/worlds/gargantua.js','createGargantua'], saturn:['../js/worlds/saturn.js','createSaturn'], miller:['../js/worlds/miller.js','createMiller'], tess:['../js/worlds/tesseract.js','createTesseract'], earth:['../js/worlds/earth.js','createEarth'], dust:['../js/worlds/dust.js','createDust'] };
+const mods = { garg: ['../js/worlds/gargantua.js','createGargantua'], saturn:['../js/worlds/saturn.js','createSaturn'], miller:['../js/worlds/miller.js','createMiller'], tess:['../js/worlds/tesseract.js','createTesseract'], earth:['../js/worlds/earth.js','createEarth'], dust:['../js/worlds/dust.js','createDust'], dock:['../js/worlds/dock.js','createDock'] };
 const m = await import(mods[W][0]);
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), powerPreference:'high-performance' });
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const { applyEnvironments } = await import('../js/env.js');
 const pr = +(q.get('pr') || 1);
 const post = createPost(renderer);
 const world = await m[mods[W][1]](renderer); window.world = world; window.post = post;
+try { const fake = { garg: world, saturn: world, earth: world, miller: world }; const { applyEnvironments: ae } = await import('../js/env.js'); const all = {}; all[W] = world; ['garg','saturn','earth','miller'].forEach(k => { if (!all[k]) all[k] = { scene: new THREE.Scene() }; }); ae(renderer, all); } catch (e) { console.warn(e); }
 function resize(){ renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false); post.setSize(innerWidth, innerHeight, pr); world.camera.aspect = innerWidth/innerHeight; world.camera.updateProjectionMatrix(); window.__renderH = innerHeight*pr; }
 resize(); addEventListener('resize', resize);
 const shot = q.get('shot'); const U = q.get('u'); const T = +(q.get('t')||0);
