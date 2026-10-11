@@ -8,11 +8,12 @@ const ROOT = path.resolve(__dirname, '..');
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.png': 'image/png' };
 function serve() { return new Promise(r => { const s = http.createServer((q, res) => { const f = path.join(ROOT, decodeURIComponent(q.url.split('?')[0])); fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': mime[path.extname(f)] || 'application/octet-stream' }); res.end(d); }); }); s.listen(0, () => r(s)); }); }
+const VERT = process.env.VERT === '1';
 async function page(browser, port) {
-  const p = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  const p = await browser.newPage(VERT ? { viewport: { width: 540, height: 960 }, deviceScaleFactor: 2 } : { viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   p.on('console', m => { if (m.type() === 'error') console.error('[page]', m.text()); });
   p.on('pageerror', e => console.error('[pageerror]', e.message));
-  await p.goto(`http://localhost:${port}/index.html?promo`);
+  await p.goto(`http://localhost:${port}/index.html?promo${VERT ? '=v' : ''}`);
   await p.waitForFunction(() => window.__ready === true, null, { timeout: 90000 });
   return p;
 }
@@ -25,7 +26,7 @@ const ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--
     fs.mkdirSync(out, { recursive: true }); const p = await page(browser, port);
     for (const ts of rest) { const t = parseFloat(ts); await p.evaluate(t => render(t), t); await p.screenshot({ path: path.join(out, `t${t.toFixed(2).padStart(6, '0')}.jpg`), type: 'jpeg', quality: 90 }); console.log('still', t); }
   } else if (mode === 'cover') {
-    for (const [k, w, h] of [['169', 1920, 1080], ['34', 1080, 1440]]) {
+    for (const [k, w, h] of [['169', 1920, 1080], ['34', 1080, 1440], ['916', 1080, 1920]]) {
       const p = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
       p.on('pageerror', e => console.error('[pageerror]', e.message));
       await p.goto(`http://localhost:${port}/index.html?cover=${k}`);

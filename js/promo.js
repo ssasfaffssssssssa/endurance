@@ -56,32 +56,47 @@ function buildTimeline(cuts) {
 export { PROMO_END };
 
 let A, curExplore = null, CLICKS = [];
+let V = false, W0 = 1920, H0 = 1080;
+// vertical: widen each 16:9 shot so it reads on a 9:16 frame
+const FOVK = { flyby: 1.65, rise: 1.35, enter: 1.4, dock: 1.35, wide: 1.6, dive: 1.5, dawn: 1.75, vista: 1.7, calm: 1.5, reveal: 1.9, fall: 1.25, drift: 1.3, stay: 1.45 };
 const fmtDate = y => { const yr = Math.floor(y); const doy = Math.floor((y - yr) * 365); const md = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; let m = 0, d = doy; while (m < 11 && d >= md[m]) { d -= md[m]; m++; } return `${yr}.${String(m + 1).padStart(2, '0')}.${String(d + 1).padStart(2, '0')}`; };
 function interp(keys, t) { if (t <= keys[0][0]) return keys[0][1]; for (let i = 1; i < keys.length; i++) if (t <= keys[i][0]) { const [a, va] = keys[i - 1], [b, vb] = keys[i]; const u = (t - a) / Math.max(1e-6, b - a); return va + (vb - va) * (u * u * (3 - 2 * u)); } return keys[keys.length - 1][1]; }
 const FILM_RANGE = { wide: [60, 63.2], dock: [63.2, 70], dawn: [14, 21.5], vista: [28, 35.5], enter: [41, 44], calm: [44, 49], rise: [52.5, 60], reveal: [70, 79.5], flyby: [79.5, 86], dive: [86, 94], fall: [94, 102.5], drift: [102.5, 110], stay: [110, 122] };
 
 export async function setup(api) {
   A = api;
+  V = new URLSearchParams(location.search).get('promo') === 'v';
+  W0 = innerWidth; H0 = innerHeight;
   let cuts = null;
   try { const r = await fetch('js/promo-cuts.json', { cache: 'no-store' }); if (r.ok) cuts = (await r.json()).cuts; } catch (e) { }
   buildTimeline(cuts);
   const css = document.createElement('style');
   css.textContent = `
     body.promo { background: radial-gradient(ellipse at 50% 40%, #2a1f14 0%, #0d0a07 45%, #000 100%); }
-    #win { position: fixed; left: 0; top: 0; width: 1920px; height: 1116px; transform-origin: 50% 0; overflow: hidden;
+    #win { position: fixed; left: 0; top: 0; width: ${W0}px; height: ${V ? H0 : H0 + 36}px; transform-origin: 50% 0; overflow: hidden;
       box-shadow: 0 40px 120px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.08), 0 0 160px rgba(232,180,106,.1); background: #000; }
     #winbar { position: absolute; left: 0; right: 0; top: 0; height: 36px; background: linear-gradient(#232120, #1a1918); border-bottom: 1px solid #0b0b0b; display: flex; align-items: center; gap: 14px; padding: 0 16px; }
     #winbar .tl { display: flex; gap: 8px; } #winbar .tl i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; } #winbar .tl i:nth-child(2) { background: #febc2e; } #winbar .tl i:nth-child(3) { background: #28c840; }
     #winbar .tab { height: 26px; margin-top: 10px; padding: 0 16px; display: flex; align-items: center; gap: 8px; background: #2c2a28; border-radius: 8px 8px 0 0; font: 400 12px var(--sans); color: #ddd; letter-spacing: .04em; }
     #winbar .url { flex: 1; max-width: 640px; margin-left: 40px; height: 24px; border-radius: 12px; background: #121110; display: flex; align-items: center; padding: 0 14px; font: 400 12px var(--mono); color: #bbb; letter-spacing: .04em; }
     #winbar .url b { color: #888; font-weight: 400; margin-right: 8px; }
-    #stage { position: absolute; left: 0; top: 36px; width: 1920px; height: 1080px; overflow: hidden; transform: translateZ(0); }
+    #stage { position: absolute; left: 0; top: ${V ? 0 : 36}px; width: ${W0}px; height: ${H0}px; overflow: hidden; transform: translateZ(0); }
+    ${V ? `#winbar { display: none; }
+    #island { position: absolute; left: 50%; top: 12px; width: 110px; height: 32px; margin-left: -55px; border-radius: 18px; background: #000; z-index: 70; box-shadow: 0 0 0 1px rgba(255,255,255,.05); }
+    #cursor svg { display: none; } #cursor { width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(255,255,255,.28); border: 2px solid rgba(255,255,255,.75); filter: none; box-shadow: 0 0 16px rgba(0,0,0,.5); }
+    .rl { padding: 8px 4px 7px !important; } .rl .z { font-size: 12px !important; letter-spacing: .04em !important; } .rl .e, .rl .n { display: none !important; }
+    #rail { overflow: hidden !important; justify-content: space-between !important; }
+    #sub { bottom: 27% !important; } #sub .sb-zh { font-size: 21px !important; letter-spacing: .08em !important; } #sub .sb-en { font-size: 10px !important; }
+    #jump { top: 15% !important; } #jump .jp-zh { font-size: 17px !important; }
+    #decode { font-size: 34px !important; } #decode small { font-size: 10px !important; }
+    #title-card .tc-t { font-size: 46px !important; letter-spacing: .3em !important; padding-left: .3em !important; } #title-card .tc-s { font-size: 15px !important; } #title-card .tc-e { font-size: 9px !important; letter-spacing: .2em !important; }
+    #clock { top: 56px !important; }` : ''}
     #cursor { position: absolute; left: 0; top: 0; width: 40px; height: 40px; z-index: 60; pointer-events: none; filter: drop-shadow(0 2px 4px rgba(0,0,0,.8)); }
     #ripple { position: absolute; left: 0; top: 0; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 2px solid var(--amber); z-index: 59; pointer-events: none; opacity: 0; }
-    #decode { font-size: 54px !important; top: 40% !important; } #decode small { font-size: 15px !important; }
+    ${V ? '' : `#decode { font-size: 54px !important; top: 40% !important; } #decode small { font-size: 15px !important; }
     #title-card .tc-t { font-size: 120px; } #title-card .tc-s { font-size: 24px; letter-spacing: .32em; margin-top: 34px; } #title-card .tc-e { font-size: 13px; letter-spacing: .36em; margin-top: 16px; }
     #sub .sb-zh { font-size: 30px; } #sub .sb-en { font-size: 14px; }
-    #jump .jp-zh { font-size: 26px; }
+    #jump .jp-zh { font-size: 26px; }`}
   `;
   document.head.appendChild(css);
   const win = document.createElement('div'); win.id = 'win';
@@ -93,6 +108,7 @@ export async function setup(api) {
   cur.innerHTML = '<svg viewBox="0 0 24 24" width="40" height="40"><path d="M4 2l15 11.5-6.6.9 3.9 7.3-2.8 1.5-3.9-7.4L4 20.5z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg>';
   const rip = document.createElement('div'); rip.id = 'ripple';
   stage.appendChild(rip); stage.appendChild(cur);
+  if (V) { const isl = document.createElement('div'); isl.id = 'island'; stage.appendChild(isl); }
   $('title-card').innerHTML = `<div class="tc-t">ENDURANCE</div><div class="tc-s">每一行代码都由 AI 写成</div><div class="tc-e">实时三维渲染 · 打开网页就能玩</div>`;
   // click schedule from the timeline
   win.style.transform = 'none';
@@ -113,7 +129,7 @@ export async function setup(api) {
 }
 
 function cursorAt(p, t0) {
-  const pts = [{ t: t0, x: 1560, y: 1000 }];
+  const pts = [{ t: t0, x: W0 * .81, y: H0 * .9 }];
   CLICKS.forEach((c, i) => { const prev = i ? CLICKS[i - 1].t : t0; pts.push({ t: Math.max(prev + .2, c.t - .6), x: pts[pts.length - 1].x, y: pts[pts.length - 1].y }); pts.push({ t: c.t - .06, x: c.x + 4, y: c.y + 6 }); });
   for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i]; if (p <= b.t) { const u = ease(clamp((p - a.t) / Math.max(.01, b.t - a.t), 0, 1)); return { x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u) }; } }
   const l = pts[pts.length - 1]; return { x: l.x, y: l.y };
@@ -167,8 +183,15 @@ export function render(p) {
   else if (s.kind === 'explore') winK = 1;
   else if (s.fx && s.fx.expand) winK = 1 - ease(clamp(into / 1.0, 0, 1));
   const win = $('win');
-  win.style.transform = `translateY(${lerp(-36, 66, winK).toFixed(2)}px) scale(${lerp(1, .84, winK).toFixed(4)})`;
-  win.style.borderRadius = winK > .02 ? '14px' : '0';
+  if (V) {
+    const sc = lerp(1, .82, winK);
+    win.style.transform = `translateY(${(winK * H0 * (1 - .82) * .5).toFixed(2)}px) scale(${sc.toFixed(4)})`;
+    win.style.borderRadius = winK > .02 ? '46px' : '0';
+    const isl = $('island'); if (isl) isl.style.opacity = winK;
+  } else {
+    win.style.transform = `translateY(${lerp(-36, 66, winK).toFixed(2)}px) scale(${lerp(1, .84, winK).toFixed(4)})`;
+    win.style.borderRadius = winK > .02 ? '14px' : '0';
+  }
   const cur = $('cursor'), rip = $('ripple');
   if (s.kind === 'reveal' || s.kind === 'explore') {
     const id = s.w;
@@ -184,6 +207,7 @@ export function render(p) {
       if (tg.length) { tg[0].classList.toggle('on', p < physT); tg[1].classList.toggle('on', p >= physT); tg[2].classList.remove('on'); }
     }
     exploreCamera(id, s.kind === 'reveal' ? lu - 1 : lu, world, s);
+    if (V && id !== 'dock') { world.camera.fov = Math.min(95, world.camera.fov * 1.55); world.camera.updateProjectionMatrix(); }
     T = 100 + p;
     world.update(T, 0, 'explore');
     A.telemetry(1 / 60, into, true);
@@ -192,7 +216,7 @@ export function render(p) {
     $('sub').classList.remove('on'); $('jump').classList.remove('on'); $('decode').classList.remove('on'); $('title-card').classList.remove('on');
   } else {
     if (document.body.className.indexOf('state-film') < 0) A.setState('film');
-    const barMax = Math.max(0, (1080 - 1920 / 2.39) / 2);
+    const barMax = V ? 0 : Math.max(0, (H0 - W0 / 2.39) / 2);
     const barK = afterExplore ? (s.fx && s.fx.expand ? sm(0, 1, into) : 1) : 0;
     document.documentElement.style.setProperty('--bar', (barK * barMax).toFixed(1) + 'px');
     if (s.kind === 'black') { world = W.garg; fade = 1; }
@@ -202,6 +226,7 @@ export function render(p) {
       const R = FILM_RANGE[s.shot]; T = lerp(R[0], R[1], uu);
       if (s.w === 'garg') world.setDoppler(0);
       world.shots[s.shot](uu, T);
+      if (V) world.camera.fov = Math.min(100, world.camera.fov * (FOVK[s.shot] || 1.6));
       world.update(T, 0, 'film');
       const fx = s.fx || {};
       if (fx.warp === 'ramp') warp = Math.pow(lu, 2.2);
@@ -249,7 +274,7 @@ export function render(p) {
   U.uExposure.value = world.exposure; U.uTime.value = p;
   U.uFade.value = fade; U.uFadeColor.value.setScalar(white ? 1 : 0);
   U.uWarp.value = warp; U.uShake.value = shake;
-  if (world.camera.aspect !== 1920 / 1080) { world.camera.aspect = 1920 / 1080; world.camera.updateProjectionMatrix(); }
+  if (world.camera.aspect !== W0 / H0) { world.camera.aspect = W0 / H0; world.camera.updateProjectionMatrix(); }
   post.render(world.scene, world.camera);
   return true;
 }
@@ -258,16 +283,16 @@ export async function cover(api, kind) {
   const { W, post, setState } = api;
   setState('film');
   ['film', 'loader'].forEach(id => $(id) && ($(id).style.display = 'none'));
-  const tall = kind === '34';
+  const tall = kind === '34' || kind === '916', xtall = kind === '916';
   const css = document.createElement('style');
   css.textContent = `
     #cv { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; text-align: center; pointer-events: none;
-      justify-content: ${tall ? 'flex-start' : 'flex-start'}; padding-top: ${tall ? 120 : 70}px; }
+      justify-content: flex-start; padding-top: ${xtall ? 300 : tall ? 120 : 70}px; }
     #cv .k { font: 500 ${tall ? 26 : 22}px var(--mono); letter-spacing: .4em; color: var(--amber); text-shadow: 0 0 20px #000; padding-left: .4em; }
     #cv .a { margin-top: ${tall ? 30 : 22}px; font: 500 ${tall ? 64 : 58}px/1.2 var(--serif); color: #fff; letter-spacing: .1em; text-shadow: 0 0 30px #000, 0 0 60px #000; }
     #cv .b { font: 700 ${tall ? 150 : 132}px/1.1 var(--serif); color: #fff; letter-spacing: .08em; text-shadow: 0 0 40px rgba(0,0,0,.9), 0 0 120px rgba(255,190,110,.35); }
     #cv .b em { font-style: normal; color: #f3c98a; }
-    #cv .s { position: fixed; left: 0; right: 0; bottom: ${tall ? 120 : 64}px; font: 400 ${tall ? 24 : 20}px var(--mono); letter-spacing: .26em; color: rgba(236,231,222,.85); text-shadow: 0 0 14px #000; }
+    #cv .s { position: fixed; left: 0; right: 0; bottom: ${xtall ? 420 : tall ? 120 : 64}px; padding: 0 40px; font: 400 ${tall ? 24 : 20}px var(--mono); letter-spacing: .26em; color: rgba(236,231,222,.85); text-shadow: 0 0 14px #000; }
     #cv .s b { color: var(--amber); font-weight: 400; }
   `;
   document.head.appendChild(css);
@@ -278,9 +303,9 @@ export async function cover(api, kind) {
   await document.fonts.ready;
   const w = W.garg, c = w.camera;
   w.setDoppler(1); w.showShipExplore = false;
-  const r = (tall ? 44 : 38) * RS, az = -1.62, el = .06;
+  const r = (xtall ? 52 : tall ? 44 : 38) * RS, az = -1.62, el = .06;
   c.position.set(r * Math.cos(el) * Math.cos(az), r * Math.sin(el), r * Math.cos(el) * Math.sin(az));
-  c.up.set(0, 1, 0); c.lookAt(0, (tall ? 7.5 : 4.2) * RS, 0); c.fov = tall ? 38 : 30;
+  c.up.set(0, 1, 0); c.lookAt(0, (xtall ? 5.5 : tall ? 7.5 : 4.2) * RS, 0); c.fov = xtall ? 46 : tall ? 38 : 30;
   c.aspect = innerWidth / innerHeight; c.updateProjectionMatrix();
   w.update(30, 0, 'film');
   w.scene.children.forEach(o => { if (o.userData && o.userData.ring) o.visible = false; });

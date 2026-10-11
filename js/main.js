@@ -83,7 +83,7 @@ function resize() {
   if (current && current.id !== qWorld) { if (qWorld) qByWorld[qWorld] = quality; quality = qByWorld[current.id] ?? (TOUCH ? .7 : 1); qWorld = current.id; graceT = 1.5; }
   const w = innerWidth, h = innerHeight;
   const maxS = current ? current.maxScale : 1;
-  const pr = clamp(DPR * quality, .5, Math.min(DPR, maxS));
+  const pr = RECORD ? DPR : clamp(DPR * quality, .5, Math.min(DPR, maxS));
   curPR = pr;
   renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
   post.setSize(w, h, pr);
