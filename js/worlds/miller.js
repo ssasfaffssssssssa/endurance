@@ -225,6 +225,15 @@ export function createMiller() {
   let front = 9000, waveH = 380, t0 = 0;
   const tmp = new THREE.Vector3();
   const shots = {
+    low(u, t) {
+      front = lerp(2200, 620, u);
+      const x = -10 + u * 6, z = 30 - u * 40;
+      camera.position.set(x, H(x, z, t, front, waveH) + 1.1, z);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(tmp.set(x + 8, lerp(40, 150, smooth(0, 1, u)), z - 900));
+      camera.rotateZ(Math.sin(t * 1.3) * .012);
+      camera.fov = 56;
+    },
     calm(u, t) {
       front = 9000 - 1200 * u;
       const e = ease(u);

@@ -9,11 +9,12 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.png': 'image/png' };
 function serve() { return new Promise(r => { const s = http.createServer((q, res) => { const f = path.join(ROOT, decodeURIComponent(q.url.split('?')[0])); fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': mime[path.extname(f)] || 'application/octet-stream' }); res.end(d); }); }); s.listen(0, () => r(s)); }); }
 const VERT = process.env.VERT === '1';
+const MB = Math.max(1, +(process.env.MBLUR || 1));
 async function page(browser, port) {
   const p = await browser.newPage(VERT ? { viewport: { width: 540, height: 960 }, deviceScaleFactor: 2 } : { viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   p.on('console', m => { if (m.type() === 'error') console.error('[page]', m.text()); });
   p.on('pageerror', e => console.error('[pageerror]', e.message));
-  await p.goto(`http://localhost:${port}/index.html?${process.env.FILM === '1' ? 'filmrec' : 'promo' + (VERT ? '=v' : '')}`);
+  await p.goto(`http://localhost:${port}/index.html?${process.env.TRAILER === '1' ? 'trailer' : process.env.FILM === '1' ? 'filmrec' : 'promo' + (VERT ? '=v' : '')}`);
   await p.waitForFunction(() => window.__ready === true, null, { timeout: 90000 });
   return p;
 }
@@ -41,7 +42,11 @@ const ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--
       const { Score, buildTrailer } = await import('/js/audio.js');
       const SR = 48000, dur = window.PROMO_END + (window.FILMREC_AUDIO ? 1.5 : .5);
       const off = new OfflineAudioContext(2, Math.ceil(SR * dur), SR);
-      const sc = new Score(location.search.includes('filmrec') ? undefined : buildTrailer()); sc.init(off);
+      let events;
+      if (location.search.includes('trailer')) { const T = await import('/js/trailer.js'); const A2 = await import('/js/audio.js'); events = T.buildTrailerScore(A2.noteOf, A2.chordOf); }
+      else events = location.search.includes('filmrec') ? undefined : buildTrailer();
+      const sc = new Score(events); sc.init(off);
+      if (location.search.includes('trailer')) sc.master.gain.value = .4;   // headroom for the braams; loudness is normalised afterwards
       for (const e of sc.events) sc.fire(e, e.t);
       const buf = await off.startRendering();
       const L = buf.getChannelData(0), Rr = buf.getChannelData(1), n = L.length;
@@ -68,11 +73,14 @@ const ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--
       const p = await page(browser, port);
       // warm-up: render the first frame twice so shaders/fonts are settled
       await p.evaluate(t => render(t), a / fps);
-      const ff = spawn('ffmpeg', ['-y', '-v', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-', '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-r', String(fps), path.join(tmp, `p${String(w).padStart(2, '0')}.mp4`)], { stdio: ['pipe', 'inherit', 'inherit'] });
+      const ff = spawn('ffmpeg', ['-y', '-v', 'error', '-f', 'image2pipe', '-framerate', String(fps * MB), '-c:v', 'mjpeg', '-i', '-', ...(MB > 1 ? ['-vf', `tmix=frames=${MB},select='eq(mod(n\\,${MB})\\,${MB - 1})',setpts=N/(${fps}*TB)`] : []), '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-r', String(fps), path.join(tmp, `p${String(w).padStart(2, '0')}.mp4`)], { stdio: ['pipe', 'inherit', 'inherit'] });
       for (let f = a; f < b; f++) {
-        await p.evaluate(t => render(t), f / fps);
-        const buf = await p.screenshot({ type: 'jpeg', quality: 95 });
-        if (!ff.stdin.write(buf)) await new Promise(r => ff.stdin.once('drain', r));
+        // motion blur: MB sub-frames spread across a 180° shutter (half the frame interval)
+        for (let k = 0; k < MB; k++) {
+          await p.evaluate(t => render(t), f / fps + (MB > 1 ? k * (.5 / fps) / (MB - 1) : 0));
+          const buf = await p.screenshot({ type: 'jpeg', quality: 95 });
+          if (!ff.stdin.write(buf)) await new Promise(r => ff.stdin.once('drain', r));
+        }
         done++; if (done % 120 === 0) { const el = (Date.now() - st) / 1000; console.log(`${done}/${total}  ${(done / el).toFixed(1)} fps  eta ${((total - done) / (done / el)).toFixed(0)}s`); }
       }
       ff.stdin.end(); await new Promise(r => ff.on('close', r)); await p.close();

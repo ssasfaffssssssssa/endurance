@@ -15,7 +15,8 @@ import { createHUD } from './hud.js';
 import { applyEnvironments } from './env.js';
 const DEV = new URLSearchParams(location.search);
 const FILMREC = DEV.has('filmrec');
-const RECORD = DEV.has('promo') || DEV.has('cover') || FILMREC;
+const TRAILER = DEV.has('trailer');
+const RECORD = DEV.has('promo') || DEV.has('cover') || FILMREC || TRAILER;
 if (RECORD) { window.__record = true; document.body.classList.add('promo'); }
 
 const $ = id => document.getElementById(id);
@@ -65,6 +66,12 @@ async function load() {
     try { renderer.compile(w.scene, w.camera); post.render(w.scene, w.camera); } catch (e) { console.warn(e); }
   }
   await step(1, '就绪 · READY');
+  if (TRAILER) {
+    try { const r = await fetch('out/trailer_vo/vo_dur.json', { cache: 'no-store' }); if (r.ok) window.VO_DUR = await r.json(); } catch (e) { }
+    const m = await import('./trailer.js');
+    await m.setup({ W, post, setState, updateBars: v => { barsOn = v; } });
+    return;
+  }
   if (FILMREC) {
     setState('film'); barsOn = true; updateBars(); lastCh = lastSub = -2;
     await document.fonts.ready;

@@ -81,6 +81,24 @@ export function createGargantua() {
       camera.rotateZ(.22 * e);
       camera.fov = 22 + 48 * e; ship.visible = false;
     },
+    // Endurance roars past the lens and shrinks toward the disk
+    passby(u) {
+      camera.position.copy(sph(34, -1.5, .065));
+      camera.up.set(0, 1, 0); camera.lookAt(tmp.set(0, 0, 0)); camera.rotateZ(.04);
+      camera.fov = 30;
+      const fwd = fwdOf(), right = rightOf(), up = upOf();
+      const e = u * u * (3 - 2 * u);
+      const p = camera.position.clone().addScaledVector(fwd, THREE.MathUtils.lerp(-6, 520, Math.pow(e, 1.35))).addScaledVector(right, THREE.MathUtils.lerp(16, -24, e)).addScaledVector(up, THREE.MathUtils.lerp(-7, -4, e));
+      ship.visible = true; ship.position.copy(p);
+      orientRing(ship, fwd, right, up, .9, .35);
+      lightFromDisk();
+    },
+    // high above the disk: the lensed far side arches over the shadow
+    orbit(u) {
+      camera.position.copy(sph(38, -1.3 + u * .45, .42 - u * .08));
+      camera.up.set(0, 1, 0); camera.lookAt(tmp.set(0, -.5 * RS, 0));
+      camera.fov = 30; ship.visible = false;
+    },
   };
 
   let doppler = 0, dopplerTarget = 0;

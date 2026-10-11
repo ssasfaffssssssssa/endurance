@@ -6,6 +6,7 @@ const mtof = m => A4 * Math.pow(2, (m - 69) / 12);
 const N = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
 const n = s => { const m = /^([A-G][#b]?)(-?\d)$/.exec(s); return 12 * (+m[2] + 1) + N[m[1]]; };
 const ch = str => str.split(' ').map(n);
+export { n as noteOf, ch as chordOf };
 
 function buildScore() {
   const E = [];
@@ -330,6 +331,81 @@ export class Score {
     const g = ctx.createGain(); g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(e.vel * .15, at + .5); g.gain.linearRampToValueAtTime(0, at + e.dur);
     o.connect(g); g.connect(this.dry); o.start(at); o.stop(at + e.dur + .05); this.track(o, g);
   }
+  // ——— trailer sound design ———
+  _shaper(drive) { const ws = this.ctx.createWaveShaper(), n = 2048, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(x * drive) / Math.tanh(drive); } ws.curve = c; ws.oversample = '2x'; return ws; }
+  // BRAAM: a wall of distorted low brass; the filter slams open then closes
+  _braam(e, at) {
+    const ctx = this.ctx, dur = e.dur || 4, end = at + dur + 2.5;
+    const notes = e.notes || [24, 31, 36, 43];
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2.2;
+    lp.frequency.setValueAtTime(140, at); lp.frequency.exponentialRampToValueAtTime(e.bright || 2200, at + .12); lp.frequency.exponentialRampToValueAtTime(380, at + dur); lp.frequency.exponentialRampToValueAtTime(120, end);
+    const sh = this._shaper(e.drive || 3.5);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(e.vel * .55, at + .03); g.gain.setTargetAtTime(e.vel * .32, at + .3, .6); g.gain.setTargetAtTime(0, at + dur, .9);
+    notes.forEach(m => [-14, 0, 13].forEach(det => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = det; o.connect(sh); o.start(at); o.stop(end); this.track(o); }));
+    sh.connect(lp).connect(g); this.out(g, .55); this.track(g);
+    const sub = ctx.createOscillator(); sub.frequency.value = mtof(notes[0]); const sg = ctx.createGain(); sg.gain.setValueAtTime(0, at); sg.gain.linearRampToValueAtTime(e.vel * .5, at + .02); sg.gain.setTargetAtTime(0, at + dur * .8, .8);
+    sub.connect(sg); sg.connect(this.dry); sub.start(at); sub.stop(end); this.track(sub, sg);
+  }
+  _taiko(e, at) {
+    const ctx = this.ctx, o = ctx.createOscillator();
+    o.frequency.setValueAtTime(e.f || 130, at); o.frequency.exponentialRampToValueAtTime(42, at + .32);
+    const g = ctx.createGain(); g.gain.setValueAtTime(e.vel, at); g.gain.exponentialRampToValueAtTime(.001, at + 1.3);
+    o.connect(g); this.out(g, .45); o.start(at); o.stop(at + 1.4); this.track(o, g);
+    const n = ctx.createBufferSource(); n.buffer = this.noise; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+    const ng = ctx.createGain(); ng.gain.setValueAtTime(e.vel * .8, at); ng.gain.exponentialRampToValueAtTime(.001, at + .22);
+    n.connect(lp).connect(ng); this.out(ng, .5); n.start(at, Math.random()); n.stop(at + .3); this.track(n, ng);
+  }
+  _subdrop(e, at) {
+    const ctx = this.ctx, o = ctx.createOscillator(), d = e.dur || 2.2;
+    o.frequency.setValueAtTime(68, at); o.frequency.exponentialRampToValueAtTime(24, at + d);
+    const g = ctx.createGain(); g.gain.setValueAtTime(e.vel, at); g.gain.setTargetAtTime(0, at + d * .55, d * .3);
+    o.connect(g); g.connect(this.dry); o.start(at); o.stop(at + d + 1); this.track(o, g);
+  }
+  _whoosh(e, at) {
+    const ctx = this.ctx, d = e.dur || 1.2, s = ctx.createBufferSource(); s.buffer = this.noise; s.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.4;
+    bp.frequency.setValueAtTime(e.f0 || 300, at); bp.frequency.exponentialRampToValueAtTime(e.f1 || 5000, at + d * .7); bp.frequency.exponentialRampToValueAtTime((e.f1 || 5000) * .4, at + d);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(e.vel, at + d * .65); g.gain.linearRampToValueAtTime(0, at + d);
+    const pan = ctx.createStereoPanner(); pan.pan.setValueAtTime(-.9, at); pan.pan.linearRampToValueAtTime(.9, at + d);
+    s.connect(bp).connect(g).connect(pan); this.out(pan, .5); s.start(at); s.stop(at + d + .05); this.track(s, g, pan);
+  }
+  // reversed cymbal: swells out of nothing and stops dead on the downbeat
+  _revcym(e, at) {
+    const ctx = this.ctx, d = e.dur || 1.6, s = ctx.createBufferSource(); s.buffer = this.noise; s.loop = true;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3500;
+    const g = ctx.createGain(); g.gain.setValueAtTime(.0001, at); g.gain.exponentialRampToValueAtTime(e.vel, at + d); g.gain.setValueAtTime(0, at + d + .005);
+    s.connect(hp).connect(g); this.out(g, .4); s.start(at); s.stop(at + d + .02); this.track(s, g);
+  }
+  // Shepard riser: octave-spaced partials glide up together, faded at both ends — it never seems to stop rising
+  _shepard(e, at) {
+    const ctx = this.ctx, d = e.dur || 8, cyc = e.cycle || 4, P = 7, f0 = 55;
+    const out = ctx.createGain(); out.gain.setValueAtTime(0, at); out.gain.linearRampToValueAtTime(e.vel, at + d * .85); out.gain.setValueAtTime(0, at + d + .01);
+    this.out(out, .5); this.track(out);
+    for (let c = 0; c < Math.ceil(d / cyc); c++) {
+      const t0 = at + c * cyc, t1 = Math.min(at + d, t0 + cyc);
+      for (let k = 0; k < P; k++) {
+        const o = ctx.createOscillator(); o.type = k < 3 ? 'triangle' : 'sine';
+        const fa = f0 * Math.pow(2, k), fb = fa * Math.pow(2, (t1 - t0) / cyc);
+        o.frequency.setValueAtTime(fa, t0); o.frequency.exponentialRampToValueAtTime(fb, t1);
+        const g = ctx.createGain();
+        // bell-shaped weight on log-frequency, sampled along the glide
+        const w = x => Math.exp(-Math.pow((x - P / 2) / (P / 4.2), 2));
+        g.gain.setValueAtTime(w(k) * .12, t0);
+        for (let s = 1; s <= 8; s++) g.gain.linearRampToValueAtTime(w(k + s / 8 * (t1 - t0) / cyc) * .12, t0 + (t1 - t0) * s / 8);
+        o.connect(g).connect(out); o.start(t0); o.stop(t1 + .02); this.track(o, g);
+      }
+    }
+  }
+  // a string-section pad: detuned saws through a slowly opening filter
+  _strings(e, at) {
+    const ctx = this.ctx, d = e.dur, att = e.att ?? 1.5;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(500, at); lp.frequency.linearRampToValueAtTime(e.bright || 2400, at + Math.min(d, att * 2));
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(e.vel, at + att); g.gain.setValueAtTime(e.vel, at + d); g.gain.linearRampToValueAtTime(0, at + d + (e.rel ?? 1.5));
+    (Array.isArray(e.notes) ? e.notes : [e.m]).forEach(m => [-9, 0, 8].forEach(det => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = det + (Math.random() - .5) * 4; const og = ctx.createGain(); og.gain.value = .12; o.connect(og).connect(lp); o.start(at); o.stop(at + d + (e.rel ?? 1.5) + .1); this.track(o); }));
+    const pan = ctx.createStereoPanner(); pan.pan.value = (Math.random() - .5) * .5;
+    lp.connect(g).connect(pan); this.out(pan, .8); this.track(g, pan);
+  }
+
   // ——— docking game: thrusters, a pulse that tightens as the spins converge, impacts, the latch ———
   gameStart() {
     if (!this.ctx || this.game) return;

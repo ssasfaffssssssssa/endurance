@@ -2,7 +2,7 @@
 // Endurance tumbles out of control; you fly the Ranger, match its spin, align with the port and close in.
 import * as THREE from 'three';
 import { NOISE, RAY, SKY, QUAD_VERT, BLACKHOLE, iscoRs } from '../glsl/common.js';
-import { createEndurance, animateEndurance, rigShadow, updateShadow } from '../endurance.js';
+import { createEndurance, createRanger, animateEndurance, rigShadow, updateShadow } from '../endurance.js';
 import { bindRay, clamp, smooth, lerp, ease } from '../util.js';
 
 const SUN = new THREE.Vector3(.55, .35, .75).normalize();
@@ -104,6 +104,7 @@ export function createDock() {
   }));
   vent.frustumCulled = false; scene.add(vent);
 
+  const chaser = createRanger(ship.userData.M); chaser.visible = false; chaser.scale.setScalar(.7); scene.add(chaser);
   const sun = new THREE.DirectionalLight(0xfff4e6, 2.3); sun.position.copy(SUN).multiplyScalar(80); scene.add(sun); scene.add(sun.target);
   rigShadow(sun, ship, 15);
   scene.add(new THREE.HemisphereLight(0xb8c8e0, 0x2a2e36, .12));
@@ -204,9 +205,22 @@ export function createDock() {
     });
   }
   const shots = {
-    dock(u, t) { const a = autoAt(u); apply(a, t); camera.fov = lerp(48, 62, smooth(.6, 1, u)); },
+    dock(u, t) { chaser.visible = false; const a = autoAt(u); apply(a, t); camera.fov = lerp(48, 62, smooth(.6, 1, u)); },
     // outside view: the tumbling wheel and the Ranger chasing it
+    // over the Ranger's shoulder as it rolls to match the tumbling wheel
+    chase(u, t) {
+      const a = autoAt(.12 + u * .6);
+      apply({ ...a, theta: 0 }, t);
+      chaser.visible = true;
+      const z = a.z + 4;
+      chaser.position.set(a.x * .6, a.y * .6, z);
+      chaser.rotation.set(0, Math.PI, 0); chaser.rotateZ(-a.theta);
+      camera.position.set(a.x * .6 + 2.6, a.y * .6 + 2.2, z + 10.5 - u * 2);
+      camera.up.set(0, 1, 0); camera.lookAt(a.x * .2, a.y * .2, z - 20); camera.rotateZ(Math.sin(t * .7) * .02);
+      camera.fov = 52;
+    },
     wide(u, t) {
+      chaser.visible = false;
       const a = autoAt(.3 + u * .3);
       holder.rotation.z = a.thetaS;
       camera.position.set(lerp(-60, -45, u), lerp(18, 12, u), lerp(70, 55, u));
