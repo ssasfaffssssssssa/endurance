@@ -174,7 +174,7 @@ export function createDock() {
       <div class="dk-msg" id="dk-msg"></div>
       <div class="dk-help">Q / E 滚转匹配转速 · W / S 推进 · 拖动鼠标对准 · <b>A</b> 自动驾驶 · <b>R</b> 重来</div>
       <div class="dk-touch"><button data-k="L">⟲</button><button data-k="F">▲</button><button data-k="B">▼</button><button data-k="R">⟳</button><button class="auto" data-a="1">AUTO</button></div>`;
-    document.getElementById('explore').appendChild(ui);
+    const ex = document.getElementById('explore'); ex.insertBefore(ui, ex.firstChild);   // under every other HUD element
     ui.querySelectorAll('.dk-touch button').forEach(b => {
       const k = b.dataset.k;
       if (b.dataset.a) { b.onclick = () => { G.auto = !G.auto; b.classList.toggle('on', G.auto); }; return; }
