@@ -19,7 +19,7 @@ if (RECORD) { window.__record = true; document.body.classList.add('promo'); }
 
 const $ = id => document.getElementById(id);
 const body = document.body;
-const setState = s => { body.className = body.className.replace(/state-\w+/, '') + ' state-' + s; state = s; };
+const setState = s => { body.className = body.className.replace(/state-\w+/, '') + ' state-' + s; state = s; graceT = 2.2; };
 let state = 'loading';
 
 /* ————— renderer ————— */
@@ -80,7 +80,7 @@ async function load() {
 /* ————— sizing & adaptive resolution ————— */
 const qByWorld = {}; let qWorld = null;
 function resize() {
-  if (current && current.id !== qWorld) { if (qWorld) qByWorld[qWorld] = quality; quality = qByWorld[current.id] ?? (TOUCH ? .7 : 1); qWorld = current.id; }
+  if (current && current.id !== qWorld) { if (qWorld) qByWorld[qWorld] = quality; quality = qByWorld[current.id] ?? (TOUCH ? .7 : 1); qWorld = current.id; graceT = 1.5; }
   const w = innerWidth, h = innerHeight;
   const maxS = current ? current.maxScale : 1;
   const pr = clamp(DPR * quality, .5, Math.min(DPR, maxS));
@@ -96,16 +96,19 @@ addEventListener('resize', resize);
 let ftAvg = 16, ftT = 0;
 // Adaptive resolution, remembered per scene. The display's own refresh interval is the yardstick:
 // hold the refresh rate -> creep quality up; fall under ~70% of it -> step down.
-let refreshMs = 16.7, refreshSamples = [], goodT = 0;
+let refreshMs = 16.7, refreshSamples = [], goodT = 0, badT = 0, graceT = 2;
 function adapt(dt) {
   if (RECORD) return;
   const ms = dt * 1000;
   if (refreshSamples.length < 90) { refreshSamples.push(ms); if (refreshSamples.length === 90) { const v = [...refreshSamples].sort((a, b) => a - b); refreshMs = Math.max(6, v[Math.floor(v.length * .2)]); } }
+  // the first moments after a scene switch include one-off GPU setup: don't judge them
+  if (graceT > 0) { graceT -= dt; ftAvg = refreshMs; ftT = 0; return; }
   ftAvg = lerp(ftAvg, ms, .05); ftT += dt;
   goodT = ftAvg < refreshMs * 1.1 ? goodT + dt : 0;
+  badT = ftAvg > refreshMs * 1.45 ? badT + dt : Math.max(0, badT - dt * 2);   // only sustained slowness counts
   if (ftT < 1.2) return;
-  if (ftAvg > refreshMs * 1.45 && quality > .35) { quality *= .87; ftT = 0; goodT = 0; resize(); }
-  else if (goodT > 2.5 && quality < 1) { quality = Math.min(1, quality * 1.1); ftT = 0; goodT = 0; resize(); }
+  if (badT > 1.5 && quality > .35) { quality *= .87; ftT = 0; goodT = 0; badT = .6; resize(); }
+  else if (goodT > (quality < .6 ? 1.2 : 2.5) && quality < 1) { quality = Math.min(1, quality * (quality < .6 ? 1.2 : 1.1)); ftT = 0; goodT = 0; resize(); }
 }
 
 /* ————— letterbox ————— */

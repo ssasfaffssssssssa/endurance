@@ -34,7 +34,10 @@ float map(vec3 p, out float mat){
     float bi0 = floor((s.x + C.x*.5) / bw);
     // books have hashed sizes, so test the neighbours too — otherwise rays slip into the next book
     float book = 1e3, hbBest = 0.;
-    for (int k = -1; k <= 1; k++){
+    // far from the shelf face: a conservative bound (books never stick out more than .22) saves the neighbour search
+    float zf = s.z - .05;
+    if (abs(zf) > .3) book = abs(zf) - .23;
+    else for (int k = -1; k <= 1; k++){
       float bi = bi0 + float(k);
       float hb = hash13(vec3(bi, shelfI, h*91.));
       if (hb < .12) continue;
