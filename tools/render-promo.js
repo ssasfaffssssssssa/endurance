@@ -13,7 +13,7 @@ async function page(browser, port) {
   const p = await browser.newPage(VERT ? { viewport: { width: 540, height: 960 }, deviceScaleFactor: 2 } : { viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   p.on('console', m => { if (m.type() === 'error') console.error('[page]', m.text()); });
   p.on('pageerror', e => console.error('[pageerror]', e.message));
-  await p.goto(`http://localhost:${port}/index.html?promo${VERT ? '=v' : ''}`);
+  await p.goto(`http://localhost:${port}/index.html?${process.env.FILM === '1' ? 'filmrec' : 'promo' + (VERT ? '=v' : '')}`);
   await p.waitForFunction(() => window.__ready === true, null, { timeout: 90000 });
   return p;
 }
@@ -39,9 +39,9 @@ const ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--
     const p = await page(browser, port);
     const b64 = await p.evaluate(async () => {
       const { Score, buildTrailer } = await import('/js/audio.js');
-      const SR = 48000, dur = window.PROMO_END + .5;
+      const SR = 48000, dur = window.PROMO_END + (window.FILMREC_AUDIO ? 1.5 : .5);
       const off = new OfflineAudioContext(2, Math.ceil(SR * dur), SR);
-      const sc = new Score(buildTrailer()); sc.init(off);
+      const sc = new Score(location.search.includes('filmrec') ? undefined : buildTrailer()); sc.init(off);
       for (const e of sc.events) sc.fire(e, e.t);
       const buf = await off.startRendering();
       const L = buf.getChannelData(0), Rr = buf.getChannelData(1), n = L.length;

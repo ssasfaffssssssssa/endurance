@@ -14,7 +14,8 @@ import { createDock } from './worlds/dock.js';
 import { createHUD } from './hud.js';
 import { applyEnvironments } from './env.js';
 const DEV = new URLSearchParams(location.search);
-const RECORD = DEV.has('promo') || DEV.has('cover');
+const FILMREC = DEV.has('filmrec');
+const RECORD = DEV.has('promo') || DEV.has('cover') || FILMREC;
 if (RECORD) { window.__record = true; document.body.classList.add('promo'); }
 
 const $ = id => document.getElementById(id);
@@ -64,6 +65,13 @@ async function load() {
     try { renderer.compile(w.scene, w.camera); post.render(w.scene, w.camera); } catch (e) { console.warn(e); }
   }
   await step(1, '就绪 · READY');
+  if (FILMREC) {
+    setState('film'); barsOn = true; updateBars(); lastCh = lastSub = -2;
+    await document.fonts.ready;
+    window.render = t => { renderFilmFrame(Math.min(t, DURATION - .001), 0); return true; };
+    window.PROMO_END = DURATION; window.__ready = true;
+    return;
+  }
   if (RECORD) {
     const m = await import('./promo.js');
     if (DEV.has('cover')) { await m.cover({ W, post, setState }, DEV.get('cover')); return; }
@@ -186,6 +194,16 @@ function filmUI(t) {
   else if (t >= 114.2 && t < 116.6) { const s = MORSE_T.filter(m => t >= m[0]).map(m => m[1]).join(' '); dec.innerHTML = (s || '&nbsp;') + '<small>· · · &nbsp;— &nbsp;· — &nbsp;— · — —</small>'; dec.classList.add('on'); }
   else dec.classList.remove('on');
   tcard.classList.toggle('on', t >= 116.8 && t < 121.4);
+  if (RECORD) {
+    // transitions are off while recording: drive every fade from t
+    const win = (a, b, f) => Math.min(smooth(a, a + f, t), 1 - smooth(b - f, b, t));
+    const c = CHAPTERS[Math.max(0, ci)];
+    cp.style.opacity = ci >= 0 ? win(c.t + .9, c.t + 4.6, .8) : 0;
+    const sb = SUBS[Math.max(0, si)]; sub.style.opacity = si >= 0 ? win(sb[0], sb[1], .35) : 0;
+    jump.style.opacity = j ? win(j.t, j.t + 3.6, .4) : 0;
+    dec.style.opacity = Math.max(win(11.1, 13.9, .4), win(114.2, 116.6, .4));
+    tcard.style.opacity = win(116.8, 121.4, 1.2);
+  }
   // transport
   $('track-fill').style.width = (t / DURATION * 100) + '%';
   const f = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -357,6 +375,26 @@ addEventListener('keydown', e => {
 });
 document.addEventListener('visibilitychange', () => { if (!DEV.has('dev') && document.hidden && state === 'film' && playing) togglePlay(); });
 
+/* ————— one film frame: a pure function of t (also used for frame-exact export) ————— */
+function renderFilmFrame(t, dt) {
+  const s = shotAt(t);
+  const w = W[s[2]];
+  if (w !== current) { current = w; resize(); }
+  const u = clamp((t - s[0]) / (s[1] - s[0]), 0, 1);
+  w.shots[s[3]](u, t);
+  w.update(t, dt, 'film');
+  const { fade, white } = transition(t);
+  const { warp, shake } = fx(t, s, u);
+  filmUI(t);
+  const b = w.bloom, U = post.u;
+  post.bloom.strength = b.strength; post.bloom.radius = b.radius; post.bloom.threshold = b.threshold;
+  U.uExposure.value = w.exposure; U.uTime.value = RECORD ? t : gT;
+  U.uFade.value = fade; U.uFadeColor.value.setScalar(white ? 1 : 0);
+  U.uWarp.value = warp; U.uShake.value = shake;
+  if (RECORD && w.camera.aspect !== innerWidth / innerHeight) { w.camera.aspect = innerWidth / innerHeight; w.camera.updateProjectionMatrix(); }
+  post.render(w.scene, w.camera);
+}
+
 /* ————— main loop ————— */
 const clock = new THREE.Clock();
 let gT = 0;
@@ -374,16 +412,9 @@ function frame() {
       score.pump();
       if (filmT >= DURATION) { endFilm(); }
     }
-    const t = Math.min(filmT, DURATION - .001);
-    const s = shotAt(t);
-    const w = W[s[2]];
-    if (w !== current) { current = w; resize(); }
-    const u = clamp((t - s[0]) / (s[1] - s[0]), 0, 1);
-    w.shots[s[3]](u, t);
-    w.update(t, playing ? dt : 0, 'film');
-    ({ fade, white } = transition(t));
-    ({ warp, shake } = fx(t, s, u));
-    filmUI(t);
+    renderFilmFrame(Math.min(filmT, DURATION - .001), playing ? dt : 0);
+    if (document.hidden && DEV.has('dev')) setTimeout(frame, 16); else requestAnimationFrame(frame);
+    return;
   } else if (state === 'explore') {
     controls && controls.update();
     current.update(gT, dt, 'explore');
