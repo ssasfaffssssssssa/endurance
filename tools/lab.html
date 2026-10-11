@@ -1,0 +1,39 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Lab</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}#i{position:fixed;left:8px;top:8px;color:#9cf;font:12px monospace;z-index:2}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three/build/three.module.js","three/addons/":"../vendor/three/examples/jsm/"}}</script>
+</head><body><canvas id="c"></canvas><div id="i"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createPost } from '../js/post.js';
+const q = new URLSearchParams(location.search);
+const W = q.get('w') || 'garg';
+const mods = { garg: ['../js/worlds/gargantua.js','createGargantua'], saturn:['../js/worlds/saturn.js','createSaturn'], miller:['../js/worlds/miller.js','createMiller'], tess:['../js/worlds/tesseract.js','createTesseract'], earth:['../js/worlds/earth.js','createEarth'], dust:['../js/worlds/dust.js','createDust'] };
+const m = await import(mods[W][0]);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), powerPreference:'high-performance' });
+const pr = +(q.get('pr') || 1);
+const post = createPost(renderer);
+const world = await m[mods[W][1]](renderer); window.world = world; window.post = post;
+function resize(){ renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false); post.setSize(innerWidth, innerHeight, pr); world.camera.aspect = innerWidth/innerHeight; world.camera.updateProjectionMatrix(); window.__renderH = innerHeight*pr; }
+resize(); addEventListener('resize', resize);
+const shot = q.get('shot'); const U = q.get('u'); const T = +(q.get('t')||0);
+let controls;
+if (!shot){ world.camera.position.copy(world.explore.pos); controls = new OrbitControls(world.camera, renderer.domElement); controls.target.copy(world.explore.target); controls.enableDamping = true; controls.minDistance = world.explore.min; controls.maxDistance = world.explore.max; }
+if (q.get('doppler')) world.setDoppler && world.setDoppler(+q.get('doppler'));
+const clock = new THREE.Clock(); let t = T, fr=0, acc=0;
+window.__frames = 0;
+function loop(){
+  const dt = Math.min(clock.getDelta(), .05); t += dt; acc += dt; fr++;
+  if (acc > 1){ document.getElementById('i').textContent = W+' '+(fr/acc).toFixed(1)+' fps'; acc=0; fr=0; }
+  if (shot){ const u = U!==null ? +U : (t*0.08)%1; world.shots[shot](u, t); }
+  else controls.update();
+  world.update(t, dt, shot ? 'film' : 'explore');
+  world.camera.aspect = innerWidth/innerHeight; world.camera.updateProjectionMatrix();
+  post.bloom.strength = world.bloom.strength; post.bloom.radius = world.bloom.radius; post.bloom.threshold = world.bloom.threshold;
+  post.u.uExposure.value = world.exposure; post.u.uTime.value = t;
+  if (world.finish) Object.entries(world.finish).forEach(([k,v])=> post.u[k].value = v);
+  post.render(world.scene, world.camera); window.__frames++;
+  if (document.hidden) setTimeout(loop, 16); else requestAnimationFrame(loop);
+}
+loop();
+</script></body></html>
